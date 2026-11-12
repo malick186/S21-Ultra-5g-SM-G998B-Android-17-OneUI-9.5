@@ -1,0 +1,69 @@
+--- original/ExpandableNotificationRow.smali
++++ patched/ExpandableNotificationRow.smali
+@@ -8994,6 +8994,22 @@
+ 
+     if-eqz v9, :cond_85
+ 
++    invoke-virtual {v9}, Landroid/view/ViewGroup$MarginLayoutParams;->isMarginRelative()Z
++    move-result v10
++    if-nez v10, :write_geom_v9
++    iget v10, v9, Landroid/widget/FrameLayout$LayoutParams;->width:I
++    if-ne v10, v7, :write_geom_v9
++    iget v10, v9, Landroid/widget/FrameLayout$LayoutParams;->height:I
++    if-ne v10, v7, :write_geom_v9
++    iget v10, v9, Landroid/widget/FrameLayout$LayoutParams;->leftMargin:I
++    if-ne v10, p2, :write_geom_v9
++    iget v10, v9, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
++    if-ne v10, p2, :write_geom_v9
++    iget v10, v9, Landroid/widget/FrameLayout$LayoutParams;->bottomMargin:I
++    if-ne v10, p2, :write_geom_v9
++    goto :cond_85
++    :write_geom_v9
++
+     iput v7, v9, Landroid/widget/FrameLayout$LayoutParams;->width:I
+ 
+     iput v7, v9, Landroid/widget/FrameLayout$LayoutParams;->height:I
+@@ -9013,6 +9029,22 @@
+ 
+     if-eqz v3, :cond_98
+ 
++    invoke-virtual {v3}, Landroid/view/ViewGroup$MarginLayoutParams;->isMarginRelative()Z
++    move-result v10
++    if-nez v10, :write_geom_v3
++    iget v10, v3, Landroid/widget/FrameLayout$LayoutParams;->width:I
++    if-ne v10, v7, :write_geom_v3
++    iget v10, v3, Landroid/widget/FrameLayout$LayoutParams;->height:I
++    if-ne v10, v7, :write_geom_v3
++    iget v10, v3, Landroid/widget/FrameLayout$LayoutParams;->leftMargin:I
++    if-ne v10, p2, :write_geom_v3
++    iget v10, v3, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
++    if-ne v10, p2, :write_geom_v3
++    iget v10, v3, Landroid/widget/FrameLayout$LayoutParams;->bottomMargin:I
++    if-ne v10, p2, :write_geom_v3
++    goto :cond_98
++    :write_geom_v3
++
+     iput v7, v3, Landroid/widget/FrameLayout$LayoutParams;->width:I
+ 
+     iput v7, v3, Landroid/widget/FrameLayout$LayoutParams;->height:I
+@@ -9031,6 +9063,20 @@
+     move-result-object p2
+ 
+     if-eqz p2, :cond_a9
++
++    invoke-virtual {p2}, Landroid/view/ViewGroup$MarginLayoutParams;->isMarginRelative()Z
++    move-result v10
++    if-nez v10, :write_geom_p2
++    iget v10, p2, Landroid/widget/FrameLayout$LayoutParams;->width:I
++    if-ne v10, v8, :write_geom_p2
++    iget v10, p2, Landroid/widget/FrameLayout$LayoutParams;->height:I
++    if-ne v10, v8, :write_geom_p2
++    iget v10, p2, Landroid/widget/FrameLayout$LayoutParams;->leftMargin:I
++    if-ne v10, v1, :write_geom_p2
++    iget v10, p2, Landroid/widget/FrameLayout$LayoutParams;->topMargin:I
++    if-ne v10, v1, :write_geom_p2
++    goto :cond_a9
++    :write_geom_p2
+ 
+     iput v8, p2, Landroid/widget/FrameLayout$LayoutParams;->width:I
+ 

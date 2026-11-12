@@ -1,0 +1,29 @@
+{
+   "cache_published" : false,
+   "clean_host_provisioning_qualified" : false,
+   "commit" : "113ce9d986f74e1526981324ec164e4d90930071",
+   "expected_resolved_config_sha256" : "fddd29aedb9eaeb3afd8f679f7d0ffb38ad24d10acd094aa5401b0b0d50023a3",
+   "kernel_built" : false,
+   "mkbootimg_commit" : "d2bb0af5ba6d3198a3e99529c97eda1be0b5a093",
+   "mkbootimg_repository" : "https://android.googlesource.com/platform/system/tools/mkbootimg/",
+   "module_abi_checked" : false,
+   "patches" : {
+      "bpf/0001-Backport-cgroup-bind-permission-flags.patch" : "53248d193a3d873e5ad6d36073c3264aa3d84969427d794d0e516aaaacceafa3",
+      "source/0001-Retain-the-UN1CA-source-overlay.patch" : "8e45dcd31b048916272e7035e4ca2d612886ee780156aaf032e7d93e5fbdbfcb",
+      "source/0002-Pin-the-retained-configuration.patch" : "83093ce10f6081047d13a6cd8acf6c205c70ec0de45b1a5b3ab2de316c2442f3",
+      "source/0003-Pin-vendor-load-policy-and-reproducible-ramdisk.patch" : "49cce58d7f81d6c9f1447b4fe11f5211601a98fbac797acde6316597f49cf278",
+      "source/0004-Enforce-FCM5-and-embed-actual-config.patch" : "ef43cf1ce4c47d27d434928bad315d137c52bb78ff01d9d6189cf4c5647c218a",
+      "uname/0001-Report-5.15.206-for-the-selected-uname-spoof.patch" : "c39def736d76de00b04bf78c00360ec9ed70f83170a11abcc8620b989b67586c",
+      "uname/0002-Respect-the-explicit-BPF-spoof-boot-option.patch" : "f6eab0889c95c4d0815373856f6a44df05a6bc7bf572ddeac7a6eca179774af2",
+      "uname/0003-Select-full-BPF-uname-mode.patch" : "4cca7e1356049eb6033d2b2dac00808ae0f59c0f9011e5b078a91315a006d587"
+   },
+   "phase" : "source-inputs-only",
+   "profile" : "uname-5.15.206-bpf-bind-enforcing-matrix5",
+   "repository" : "https://github.com/FlopKernel-Series/flop_exynos2100_kernel.git",
+   "toolchain_build_id" : "15682573",
+   "toolchain_repository" : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86",
+   "toolchain_repository_commit" : "95ecb5c85cd772cae7b67dabf0a1c34c103b6351",
+   "toolchain_subdirectory" : "clang-r596125",
+   "toolchain_subtree_git_tree" : "44e59376d6231e87e4ba5545c6baa619b6d4ad54",
+   "uname_config_sha256" : "af43b6dd66e749a596310b0d5d72e6030906ecb3aaf1ffa7e03e7fd0aac8c7e9"
+}

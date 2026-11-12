@@ -1,0 +1,1968 @@
+diff --git a/.github/tests/test_p3s_encryption.py b/.github/tests/test_p3s_encryption.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..7bb749fea1fe3a606d8ba9dbc4c50a469fbb6315
+--- /dev/null
++++ b/.github/tests/test_p3s_encryption.py
+@@ -0,0 +1,51 @@
++"""Exercise the real ROM fstab adapter against temporary filesystem fixtures."""
++import json
++from pathlib import Path
++import subprocess
++import tempfile
++import unittest
++
++MODULE = str(Path(__file__).resolve().parents[2] / 'platform/exynos2100/patches/floppy/customize.sh')
++FSTAB = '/dev/block/by-name/userdata /data f2fs noatime wait,fileencryption=aes-256-xts:aes-256-cts:v2,keydirectory=/metadata/vold/metadata_encryption\n/dev/block/by-name/metadata /metadata ext4 noatime wait,formattable\n'
++
++class EncryptionTests(unittest.TestCase):
++    def test_target_fbe_preserves_vendor_and_updates_ramdisk(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d = Path(tmp); vendor = d/'vendor'; vendor.write_text(FSTAB)
++            receipt = d/'receipt.json'; receipt.write_text(json.dumps({'userdata_encryption_policy':'target-fbe'}))
++            subprocess.run(['bash',MODULE,'userdata',str(vendor),str(receipt)], check=True, capture_output=True)
++            self.assertEqual(vendor.read_text(), FSTAB)
++            ramdisk = d/'ramdisk'; ramdisk.mkdir()
++            fstab = ramdisk/'fstab.exynos2100'
++            fstab.write_text(FSTAB.replace(',fileencryption=aes-256-xts:aes-256-cts:v2,keydirectory=/metadata/vold/metadata_encryption',''))
++            subprocess.run(['bash',MODULE,'fstab',str(ramdisk),str(vendor),str(receipt)], check=True, capture_output=True)
++            self.assertIn('fileencryption=aes-256-xts:aes-256-cts:v2', fstab.read_text())
++            self.assertIn('keydirectory=/metadata/vold/metadata_encryption', fstab.read_text())
++    def test_unknown_policy_rejected_without_writes(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d=Path(tmp); vendor=d/'vendor'; vendor.write_text(FSTAB)
++            receipt=d/'receipt'; receipt.write_text('{"userdata_encryption_policy":"typo"}')
++            result=subprocess.run(['bash',MODULE,'userdata',str(vendor),str(receipt)],capture_output=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertEqual(vendor.read_text(),FSTAB)
++    def test_missing_fbe_rejected_without_ramdisk_writes(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d=Path(tmp); vendor=d/'vendor'; vendor.write_text(FSTAB.replace('fileencryption=', 'unrecognized='))
++            ramdisk=d/'ramdisk'; ramdisk.mkdir(); fstab=ramdisk/'fstab.exynos2100'; fstab.write_text(FSTAB)
++            receipt=d/'receipt'; receipt.write_text('{"userdata_encryption_policy":"target-fbe"}')
++            result=subprocess.run(['bash',MODULE,'fstab',str(ramdisk),str(vendor),str(receipt)],capture_output=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertEqual(fstab.read_text(),FSTAB)
++
++    def test_vendor_without_fbe_rejected_before_any_write(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d=Path(tmp); vendor=d/'vendor'
++            original=FSTAB.replace('fileencryption=', 'unrecognized=')
++            vendor.write_text(original)
++            receipt=d/'receipt'; receipt.write_text('{"userdata_encryption_policy":"target-fbe"}')
++            result=subprocess.run(['bash',MODULE,'userdata',str(vendor),str(receipt)],capture_output=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertEqual(vendor.read_text(),original)
++
++if __name__ == '__main__':
++    unittest.main()
+diff --git a/.github/tests/test_p3s_image_metadata.py b/.github/tests/test_p3s_image_metadata.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7f22a5bc544895e58656ec9ca674d1b7bf9f64c
+--- /dev/null
++++ b/.github/tests/test_p3s_image_metadata.py
+@@ -0,0 +1,33 @@
++from pathlib import Path
++import subprocess
++import tempfile
++import unittest
++
++ROOT=Path(__file__).resolve().parents[2]
++CHECK=ROOT/"scripts/internal/check_p3s_image_metadata.py"
++
++class ImageMetadata(unittest.TestCase):
++    def run_case(self,text,artifact=False):
++        with tempfile.TemporaryDirectory(prefix="p3s-metadata-") as tmp:
++            root=Path(tmp); (root/"configs").mkdir()
++            (root/"configs/file_context-vendor").write_text(text)
++            if artifact:
++                (root/"vendor").mkdir()
++                (root/"vendor/0001-source.patch").write_text("not a ROM payload")
++            output=root/"labels.txt"
++            result=subprocess.run(["python3",str(CHECK),str(root),str(output)],capture_output=True,text=True)
++            return result,output.read_text() if output.exists() else ""
++    def test_valid_metadata_collects_unique_contexts(self):
++        result,labels=self.run_case("/vendor u:object_r:vendor_file:s0\n/vendor/bin -d u:object_r:vendor_file:s0\n")
++        self.assertEqual(result.returncode,0,result.stdout)
++        self.assertEqual(labels,"u:object_r:vendor_file:s0\n")
++    def test_missing_label_is_rejected(self):
++        result,_=self.run_case("/vendor/0001-source.patch \n")
++        self.assertNotEqual(result.returncode,0)
++        self.assertIn("missing/invalid",result.stdout)
++    def test_source_patch_is_rejected_even_with_valid_label(self):
++        result,_=self.run_case("/vendor u:object_r:vendor_file:s0\n",artifact=True)
++        self.assertNotEqual(result.returncode,0)
++        self.assertIn("not a partition payload",result.stdout)
++
++if __name__=="__main__": unittest.main()
+diff --git a/.github/tests/test_p3s_vintf.py b/.github/tests/test_p3s_vintf.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4bc9c89620471220760da5aeeaac5557ec045625
+--- /dev/null
++++ b/.github/tests/test_p3s_vintf.py
+@@ -0,0 +1,77 @@
++"""Exercise the full VINTF module in temporary build-input fixtures."""
++from pathlib import Path
++import os
++import json
++import hashlib
++import subprocess
++import tempfile
++import unittest
++
++MODULE=str(Path(__file__).resolve().parents[2]/'unica/patches/vintf/customize.sh')
++class VintfTests(unittest.TestCase):
++    def run_module(self,root,missing=False,existing=False,level='5', require_cfi=False, wrong_hash=False):
++        work=root/'work'; firmware=root/'fw/SM-G998B_AUT/system/system/etc/vintf'
++        (work/'vendor/etc/vintf').mkdir(parents=True)
++        (work/'vendor/etc/vintf/manifest.xml').write_text('<manifest version="2.0" type="device" target-level="'+level+'"/>')
++        target=root/'src/target/p3s/vintf'; target.mkdir(parents=True)
++        (target/'compatibility_matrix.device.xml').write_text('<compatibility-matrix version="9.0" type="framework"/>')
++        dest=work/'system/system/etc/vintf'; dest.mkdir(parents=True)
++        matrix='<compatibility-matrix version="9.0" type="framework" level="5"><kernel version="5.4.61"/></compatibility-matrix>'
++        if require_cfi:
++            matrix=matrix.replace('/></compatibility-matrix>', '><config><key>CONFIG_CFI_CLANG</key><value type="tristate">y</value></config></kernel></compatibility-matrix>')
++        kernel=work/'kernel'; kernel.mkdir()
++        cfg='# CONFIG_CFI_CLANG is not set\nCONFIG_ARM64=y\n'
++        (kernel/'kernel.config').write_text(cfg)
++        receipt={'compiled_release':'5.4.304-test','source_inputs':{'expected_resolved_config_sha256':
++                 '0'*64 if wrong_hash else hashlib.sha256(cfg.encode()).hexdigest()}}
++        (kernel/'floppy-preserved.json').write_text(json.dumps(receipt))
++        if not missing:
++            firmware.mkdir(parents=True)
++            (firmware/'compatibility_matrix.5.xml').write_text(matrix)
++        if existing:
++            (dest/'compatibility_matrix.5.xml').write_text('preserve different matrix')
++        environment=os.environ|{'SOURCE_PLATFORM_SDK_VERSION':'37','TARGET_PLATFORM_SDK_VERSION':'35',
++            'TARGET_CODENAME':'p3s','TARGET_FIRMWARE':'SM-G998B/AUT','SRC_DIR':str(root/'src'),
++            'WORK_DIR':str(work),'FW_DIR':str(root/'fw'),'DEBUG':'false','MODPATH':str(Path(MODULE).parent)}
++        script='''set -e
++ABORT() { echo "$*" >&2; exit 23; }
++LOG() { :; }
++LOGW() { :; }
++EVAL() { eval "$*"; }
++ADD_TO_WORK_DIR() { mkdir -p "$WORK_DIR/system/$(dirname "$3")"; if [[ "$1" = /* ]]; then cp "$1/$3" "$WORK_DIR/system/$3"; else cp "$FW_DIR/SM-G998B_AUT/system/$3" "$WORK_DIR/system/$3"; fi; }
++source "$1"
++'''
++        result=subprocess.run(['bash','-c',script,'test',MODULE],env=environment,capture_output=True,text=True)
++        return result,dest,matrix
++    def test_restores_exact_original_contract(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,matrix=self.run_module(Path(tmp))
++            self.assertEqual(result.returncode,0,result.stderr)
++            self.assertEqual((dest/'compatibility_matrix.5.xml').read_text(),matrix)
++    def test_missing_original_rejected(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,_=self.run_module(Path(tmp),missing=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertFalse((dest/'compatibility_matrix.5.xml').exists())
++    def test_existing_different_matrix_preserved(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,_=self.run_module(Path(tmp),existing=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertEqual((dest/'compatibility_matrix.5.xml').read_text(),'preserve different matrix')
++    def test_unreviewed_vendor_level_rejected(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,_=self.run_module(Path(tmp),level='6')
++            self.assertNotEqual(result.returncode,0)
++            self.assertFalse((dest/'compatibility_matrix.5.xml').exists())
++    def test_actual_disabled_cfi_blocks_matrix_staging(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,_=self.run_module(Path(tmp),require_cfi=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertFalse((dest/'compatibility_matrix.5.xml').exists())
++    def test_changed_kernel_config_is_rejected(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            result,dest,_=self.run_module(Path(tmp),wrong_hash=True)
++            self.assertNotEqual(result.returncode,0)
++            self.assertFalse((dest/'compatibility_matrix.5.xml').exists())
++if __name__=='__main__':
++    unittest.main()
+diff --git a/.github/tests/test_p3s_zygote_helper.py b/.github/tests/test_p3s_zygote_helper.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..424cfa021dfda695023903fb9ef41f85b1611e98
+--- /dev/null
++++ b/.github/tests/test_p3s_zygote_helper.py
+@@ -0,0 +1,26 @@
++"""Exercise the retained C helper, with mocks only for native capability/proc I/O."""
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import unittest
++
++ROOT=Path(__file__).resolve().parents[2]
++
++class ZygoteCapabilityContract(unittest.TestCase):
++    def test_private_query_preserves_native_errors(self):
++        compiler=shutil.which("clang") or shutil.which("cc")
++        self.assertIsNotNone(compiler,"A host C compiler is required")
++        source=ROOT/"platform/exynos2100/patches/zygote/source"
++        with tempfile.TemporaryDirectory(prefix="p3s-cap-test-") as tmp:
++            executable=Path(tmp)/"test-cap-query"
++            subprocess.run([compiler,"-D_GNU_SOURCE","-O2","-Wall","-Wextra","-Werror",
++                "-Dopen=test_open","-Dread=test_read","-Dclose=test_close",
++                str(source/"zygote-cap-compat.c"),str(source/"test-cap-query-contract.c"),
++                "-o",str(executable)],check=True,capture_output=True,text=True)
++            result=subprocess.run([str(executable)],check=True,capture_output=True,text=True)
++            lines=result.stdout.splitlines()
++            self.assertEqual(len(lines),16)
++            self.assertTrue(all(line.startswith("PASS ") for line in lines))
++
++if __name__=="__main__": unittest.main()
+diff --git a/platform/exynos2100/patches/floppy/README.md b/platform/exynos2100/patches/floppy/README.md
+index 31f9a80400e25725875f5e9e66afdc5da2fa3c61..023bea2cea5478c79cf72e625dd0d9244163ce57 100644
+--- a/platform/exynos2100/patches/floppy/README.md
++++ b/platform/exynos2100/patches/floppy/README.md
+@@ -1,3 +1,30 @@
++# Experimental p3s matrix5 cohort
++
++This personal SM-G998B port selects `uname-5.15.206-bpf-bind-enforcing-matrix5-a17`.
++Actual kernel version remains Linux 5.4.304. This is not a Linux 5.15 upgrade.
++Always-enforcing SELinux, strict CFI and shadow call stack are enabled; the
++FCM5 fragment follows the optional Droidspaces fragment so SYSVIPC stays off.
++DEBUG_LIST and SCHED_DEBUG are enabled. Forced module unloading, debugfs and
++zsmalloc statistics are disabled. The resolved configuration is pinned to
++`fddd29aedb9eaeb3afd8f679f7d0ffb38ad24d10acd094aa5401b0b0d50023a3`.
++
++Build with `EXTRA_CONFIG_FRAGMENTS=unica.config` and
++`FINAL_CONFIG_FRAGMENTS=p3s_matrix.config` using the retained pinned compiler
++and build environment. Patch 0004 supplies CFI-compatible split LTO units,
++the Samsung EMS scheduler-key export, and actual build-config embedding.
++The publisher verifies the embedded config against the resolved build .config.
++Source, compiler, exact-config, ELF/module ABI and image checks remain active.
++Earlier published cohorts are separate and cannot satisfy this profile.
++
++The p3s target preserves the target FBE contract. Host checks do not establish
++policy loading, data migration or successful device boot. Do not install a
++kernel alone into the running ROM; the ROM needs its matched r54 module cohort.
++The current packaging recipe retains the upstream boot-header metadata values;
++final OS/security metadata and encrypted-data behavior require explicit review.
++
++The following sections describe historical upstream provisioning and are not
++proof that this new cohort has completed compilation, publication or boot.
++
+ # Retained Floppy/r54 build cohort
+ 
+ The earlier kernel-only repair recommendation is withdrawn as an explanation
+@@ -268,7 +295,7 @@ env CLANG_TYPE=custom CUST_DIR=/absolute/pinned-toolchain/clang-r596125 \
+     PLATFORM_VERSION=12 ANDROID_MAJOR_VERSION=s TARGET_SOC=universal2100 \
+     KERNEL_BUILD_JOBS=4 USE_CCACHE=0 USE_THINLTO_CACHE=0 \
+     SKIP_BUILD_DEPENDENCY_SETUP=1 KEEP_KERNEL_BUILD_INTERMEDIATES=1 \
+-    DO_ZIP=0 DO_TAR=0 BOOT_OS_VERSION=16.0.0 BOOT_OS_PATCH_LEVEL=2026-10 \
++    DO_ZIP=0 DO_TAR=0 BOOT_OS_VERSION=17.0.0 BOOT_OS_PATCH_LEVEL=2026-10 \
+     bash build/ckbuild.sh kq
+ ```
+ 
+diff --git a/platform/exynos2100/patches/floppy/customize.sh b/platform/exynos2100/patches/floppy/customize.sh
+index 2bfcf23f1897217e048efa14d004df3b716d2315..e36421b8029592deb422415f75223276494aaaa0 100644
+--- a/platform/exynos2100/patches/floppy/customize.sh
++++ b/platform/exynos2100/patches/floppy/customize.sh
+@@ -30,6 +30,7 @@ FLOPPY_PREPARE_SOURCE()
+         source/0001-Retain-the-UN1CA-source-overlay.patch \
+         source/0002-Pin-the-retained-configuration.patch \
+         source/0003-Pin-vendor-load-policy-and-reproducible-ramdisk.patch \
++        source/0004-Enforce-FCM5-and-embed-actual-config.patch \
+         uname/0001-Report-5.15.206-for-the-selected-uname-spoof.patch \
+         uname/0002-Respect-the-explicit-BPF-spoof-boot-option.patch \
+         uname/0003-Select-full-BPF-uname-mode.patch \
+@@ -80,7 +81,7 @@ sub rows {
+     need(keys(%r)==2 && $r{'/data'} && $r{'/metadata'},'Missing userdata/metadata mount'); return \%r;
+ }
+ sub policy { my($r)=@_; return 'target-fbe' unless exists $r->{userdata_encryption_policy};
+-    need($r->{userdata_encryption_policy} eq 'unencrypted','Unsupported userdata encryption policy'); return 'unencrypted' }
++    need($r->{userdata_encryption_policy} =~ /^(?:unencrypted|target-fbe)$/,'Unsupported userdata encryption policy'); return $r->{userdata_encryption_policy} }
+ sub unencrypted { my($text,$role)=@_; my $r=rows($text);
+     for my $m(keys %$r) { my @bad=grep {crypto($_)} split /,/,$r->{$m}[4]; need(!@bad,"$role still requests userdata encryption: $m @bad") } return $r }
+ sub contract { my($text)=@_; my $r=rows($text); return {map {$_=>[$r->{$_}[2],[sort grep {crypto($_)} split /,/,$r->{$_}[4]]]} keys %$r} }
+@@ -107,18 +108,18 @@ sub uname_check { my($r,$config)=@_;
+     need(@selected==1 && $selected[0] eq 'CONFIG_FAKE_UNAME_5_15=y','Wrong uname spoof configuration');
+ }
+ sub target { need(($ENV{TARGET_CODENAME}//'') =~ /^(?:t2s|o1s|p3s|r9s)$/,'Unsupported target'); return $ENV{TARGET_CODENAME} }
+-sub cohort_root { return "$ENV{OUT_DIR}/kernel/floppy/cohorts/uname-5.15.206-bpf-bind" }
+-sub selected_publication { my $p=cohort_root(); return (-e $p || -l $p)?'uname-5.15.206-bpf-bind':'' }
+-sub install_root { return ($_[0]?cohort_root().'/install/':"$ENV{OUT_DIR}/kernel/floppy/install/uname-5.15.206-bpf-bind/").target() }
++sub cohort_root { return "$ENV{OUT_DIR}/kernel/floppy/cohorts/uname-5.15.206-bpf-bind-enforcing-matrix5-a17" }
++sub selected_publication { my $p=cohort_root(); return (-e $p || -l $p)?'uname-5.15.206-bpf-bind-enforcing-matrix5-a17':'' }
++sub install_root { return ($_[0]?cohort_root().'/install/':"$ENV{OUT_DIR}/kernel/floppy/install/uname-5.15.206-bpf-bind-enforcing-matrix5-a17/").target() }
+ sub publication_check {
+     my $p=cohort_root(); need(-d $p && !-l $p && -f "$p/cohort.json" && !-l "$p/cohort.json",'Incomplete/unsafe published cohort');
+-    my $r=json("$p/cohort.json"); need($r->{profile} eq 'uname-5.15.206-bpf-bind' && same($r->{source_inputs},source_inputs()),'Published source inputs differ from the module');
++    my $r=json("$p/cohort.json"); need($r->{profile} eq 'uname-5.15.206-bpf-bind-enforcing-matrix5-a17' && same($r->{source_inputs},source_inputs()),'Published source inputs differ from the module');
+     need(sha("$p/module-abi-proof.json") eq $r->{module_abi_proof_sha256},'Published ABI proof checksum mismatch');
+     need(sha("$p/cache/$_/floppy-build-info.json") eq $r->{target_manifests}{$_},'Published target manifest checksum mismatch') for qw(t2s o1s p3s r9s);
+ }
+ sub cache { my($version,$fixed,$full,$bind,$published)=@_; my $t=target(); need(!defined($version)||$version eq '5.15.206','Unreviewed uname spoof version');
+-    if($published) { need($bind && $full && $published eq 'uname-5.15.206-bpf-bind','Invalid published receipt profile'); publication_check(); return cohort_root()."/cache/$t" }
+-    return "$ENV{OUT_DIR}/floppy-images/".(defined($version)?($bind?'uname-5.15.206-bpf-bind/':($full?'uname-5.15.206-bpf-full/':($fixed?'uname-5.15.206-bpf-option/':'uname-5.15.206/'))):'').$t }
++    if($published) { need($bind && $full && $published eq 'uname-5.15.206-bpf-bind-enforcing-matrix5-a17','Invalid published receipt profile'); publication_check(); return cohort_root()."/cache/$t" }
++    return "$ENV{OUT_DIR}/floppy-images/".(defined($version)?($bind?'uname-5.15.206-bpf-bind-enforcing-matrix5-a17/':($full?'uname-5.15.206-bpf-full/':($fixed?'uname-5.15.206-bpf-option/':'uname-5.15.206/'))):'').$t }
+ sub payload {
+     my($d,$name)=@_;
+     if($name eq 'boot.img') { need(substr($d,0,8) eq 'ANDROID!' && u32($d,40)==3,'Invalid boot v3');
+@@ -186,8 +187,8 @@ sub verify_build {
+     need($release eq '5.4.304-Floppy-v1.1.2-KN-g113ce9d986f7-dirty','Unexpected real kernel release');
+     need(sha("$out/.config") eq source_inputs()->{expected_resolved_config_sha256},'Unreviewed resolved kernel configuration');
+     my $image="$out/arch/arm64/boot/Image"; my %inputs=map {$_=>sha("$out/$_")} qw(.config Module.symvers System.map vmlinux arch/arm64/boot/Image);
+-    # Upstream kernel/Makefile intentionally embeds the stock config, not .config.
+-    need(run('bash',"$pin/scripts/extract-ikconfig",$image) eq raw("$pin/arch/arm64/configs/exynos2100-r9sxxx-stock_defconfig"),'Image embedded stock-config template differs from pinned upstream');
++    # Verify the compiled Image embeds this actual resolved configuration.
++    need(run('bash',"$pin/scripts/extract-ikconfig",$image) eq raw("$out/.config"),'Image embedded configuration differs from actual build .config');
+     run("$tc/bin/llvm-objcopy",'-O','binary','-R','.note','-R','.note.gnu.build-id','-R','.comment','-S',"$out/vmlinux","$pin/Image");
+     need(sha("$pin/Image") eq $inputs{'arch/arm64/boot/Image'},'Image does not match this vmlinux');
+     my $data=raw("$pin/Image"); need(index($data,"5.15.206\0")>=0 && index($data,"5.10.200\0")==-1 && index($data,"uname_bpf_spoof=2\0")>=0,'Compiled uname/mode-2 defaults are missing');
+@@ -199,13 +200,32 @@ sub verify_build {
+     for(split /\n/,raw("$out/Module.symvers")) { my($crc,$name,$owner)=split; need(defined($owner) && $crc =~ /^0x[0-9a-fA-F]{8}$/ && !exists($providers{$name}),'Invalid/duplicate Module.symvers export'); $providers{$name}=[hex($crc),$owner] }
+     for(split /\n/,raw("$out/System.map")) { my($addr,$type,$name)=split; $map{$name}{address_hex($addr)}=1 if defined $name }
+     my $kernel=elf("$out/vmlinux",3); my $strings=section($kernel,'__ksymtab_strings'); my $base=$kernel->{by}{'__ksymtab_strings'}[3];
++    my %elf_symbols;
++    for my $s(symbols($kernel)) { $elf_symbols{$s->[0]}{$s->[4]}=$s->[1]&15 if $s->[3] }
++    my $cfi_exports=0;
++    my $export_address=sub {
++        my($name,$value)=@_;
++        return 1 if exists($map{$name}) && exists($map{$name}{$value}) && exists($elf_symbols{$name}{$value});
++        my $jump=$name.'.cfi_jt';
++        need(exists($map{$jump}{$value}) && exists($elf_symbols{$jump}{$value}) && $elf_symbols{$jump}{$value}==2,
++            "Export is neither the real symbol nor its matching ELF/System.map CFI trampoline: $name");
++        my @sections=grep {($_->[2]&4) && $value>=$_->[3] && $value+4<=$_->[3]+$_->[5]} @{$kernel->{rows}};
++        need(@sections==1,"CFI trampoline is not in one executable section: $name");
++        my $r=$sections[0]; my $word=unpack('V',take($kernel->{fh},$r->[4]+$value-$r->[3],4));
++        need(($word&0xfc000000)==0x14000000,"CFI trampoline is not an AArch64 direct branch: $name");
++        my $delta=($word&0x03ffffff)*4; $delta-=0x10000000 if $delta&0x08000000;
++        my $destination=$value+$delta;
++        need(exists($map{$name}{$destination}) && exists($elf_symbols{$name}{$destination}) && $elf_symbols{$name}{$destination}==2,
++            "CFI trampoline does not branch to the matching implementation: $name");
++        $cfi_exports++; return 1;
++    };
+     # This pinned config uses absolute 64-bit kernel_symbol entries and u32 CRCs.
+     for my $suffix('',qw(_gpl _unused _unused_gpl _gpl_future)) {
+         my $table=section($kernel,'__ksymtab'.$suffix); my $crc=section($kernel,'__kcrctab'.$suffix);
+         need(length($table)%24==0 && length($table)/24==length($crc)/4,'Kernel export/CRC table length mismatch');
+         for(my $o=0;$o<length($table);$o+=24) { my($value,$ptr)=unpack('Q<Q<',substr($table,$o,16)); my $name=cstr($strings,$ptr-$base); my $p=$providers{$name};
+             need($p && $p->[1] eq 'vmlinux' && $p->[0]==u32($crc,$o/6) && !$checked{$name}++,"vmlinux export CRC/provider mismatch: $name");
+-            need(exists($map{$name}) && $map{$name}{$value},"System.map differs from vmlinux: $name"); }
++            need($export_address->($name,$value),"System.map differs from vmlinux: $name"); }
+     }
+     need(exists($checked{'__cgroup_bpf_run_filter_sock_addr_flags'}),'Compiled bind-flags export is missing');
+     my $installed="$source/modules_out/lib/modules/$release"; my @paths=sort grep {/\.ko$/} files($installed);
+@@ -237,8 +257,8 @@ sub verify_build {
+     need(@order==284 && same(\@order,\@built) && same({map {$_=>1} @order},{map {$_=>1} keys %modules}),'Installed/built modules.order differs from the verified module set');
+     return ({kernel_release=>$release,module_count=>284,strong_imports_checked=>$strong,versioned_imports_checked=>$versions,exports_checked=>scalar(keys %checked),
+         method=>'Actual ELF64 ARM64 imports, export CRCs/providers, vermagic, vmlinux/Image and pinned stock IKCONFIG template; no module loading',
+-        inputs=>\%inputs,modules=>\@proof,all_passed=>JSON::PP::true,Image_matches_vmlinux=>JSON::PP::true,embedded_stock_config_checked=>JSON::PP::true,
+-        embedded_config_is_actual_build_config=>JSON::PP::false,native_release_strings_checked=>JSON::PP::true,physical_boot_qualified=>JSON::PP::false},\%modules);
++        inputs=>\%inputs,modules=>\@proof,all_passed=>JSON::PP::true,Image_matches_vmlinux=>JSON::PP::true,embedded_actual_config_checked=>JSON::PP::true,cfi_export_trampolines_verified=>$cfi_exports,
++        embedded_config_is_actual_build_config=>JSON::PP::true,native_release_strings_checked=>JSON::PP::true,physical_boot_qualified=>JSON::PP::false},\%modules);
+ }
+ 
+ sub publish_build {
+@@ -299,7 +319,7 @@ OUT_BOOTIMG_ONEUI="$IMAGES_DIR/boot_oneui.img"; OUT_BOOTIMG_AOSP="$IMAGES_DIR/bo
+ OUT_KERNEL="$KDIR/Image"; PREBUILT_RAMDISK="$KDIR/build/boot/ramdisk"
+ MKBOOTIMG="$KDIR/build/mkbootimg/mkbootimg.py"; MKDTBOIMG="$KDIR/build/dtb/mkdtboimg.py"
+ IN_DTB="$OUTDIR/arch/arm64/boot/dts/exynos/exynos2100.dtb"; OUT_DTBIMAGE="$TMPDIR/dtb.img"
+-BOOT_OS_VERSION=16.0.0; BOOT_OS_PATCH_LEVEL=2026-10; BOOT_HEADER_VERSION=3; VENDOR_CMDLINE=loop.max_part=7; DO_NHMOD=0
++BOOT_OS_VERSION=17.0.0; BOOT_OS_PATCH_LEVEL=2026-10; BOOT_HEADER_VERSION=3; VENDOR_CMDLINE=loop.max_part=7; DO_NHMOD=0
+ source build/scripts/post.sh
+ source build/scripts/images.sh
+ source build/scripts/dtbo.sh
+@@ -364,19 +384,20 @@ SHELL
+ 
+ sub source_inputs {
+     return {repository=>'https://github.com/FlopKernel-Series/flop_exynos2100_kernel.git',
+-        commit=>'113ce9d986f74e1526981324ec164e4d90930071',profile=>'uname-5.15.206-bpf-bind',
++        commit=>'113ce9d986f74e1526981324ec164e4d90930071',profile=>'uname-5.15.206-bpf-bind-enforcing-matrix5-a17',
+         mkbootimg_repository=>'https://android.googlesource.com/platform/system/tools/mkbootimg/',
+         mkbootimg_commit=>'d2bb0af5ba6d3198a3e99529c97eda1be0b5a093',
+         patches=>{map {$_=>sha("$ENV{FLOPPY_MODULE}/$_")} qw(
+             source/0001-Retain-the-UN1CA-source-overlay.patch
+             source/0002-Pin-the-retained-configuration.patch
+             source/0003-Pin-vendor-load-policy-and-reproducible-ramdisk.patch
++            source/0004-Enforce-FCM5-and-embed-actual-config.patch
+             uname/0001-Report-5.15.206-for-the-selected-uname-spoof.patch
+             uname/0002-Respect-the-explicit-BPF-spoof-boot-option.patch
+             uname/0003-Select-full-BPF-uname-mode.patch
+             bpf/0001-Backport-cgroup-bind-permission-flags.patch)},
+         uname_config_sha256=>sha("$ENV{FLOPPY_MODULE}/uname/uname.config"),
+-        expected_resolved_config_sha256=>'40971838c329afaa1c25af65392dfd99ea326595d909e2e6f110c8e94a85268f',
++        expected_resolved_config_sha256=>'fddd29aedb9eaeb3afd8f679f7d0ffb38ad24d10acd094aa5401b0b0d50023a3',
+         toolchain_repository=>'https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86',
+         toolchain_repository_commit=>'95ecb5c85cd772cae7b67dabf0a1c34c103b6351',
+         toolchain_subdirectory=>'clang-r596125',toolchain_build_id=>'15682573',
+@@ -404,7 +425,7 @@ if($action eq 'stage') {
+     need($r->{compiled}{mali_version} eq 'r54p3-01eac0 (UK version 11.46)','Not the retained Mali r54 build');
+     need($r->{compiled}{module_symbol_abi_checked},'Kernel/module ABI was not verified');
+     need(sha("$c/kernel.config") eq $r->{config_sha256},'Configuration checksum mismatch'); uname_check($r,$config);
+-    need($config =~ /^CONFIG_SECURITY_SELINUX=y$/m && $config =~ /^CONFIG_SECURITY_SELINUX_ALWAYS_PERMISSIVE=y$/m,'The existing SELinux mode/configuration differs');
++    need($config =~ /^CONFIG_SECURITY_SELINUX=y$/m && $config =~ /^CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y$/m,'The existing SELinux mode/configuration differs');
+     for my $n(qw(boot.img dtbo.img vendor_boot.img)) { need(sha("$c/$n") eq $r->{images}{$n}{sha256},"Image checksum mismatch: $n");
+         my $key='TARGET_'.uc(substr($n,0,-4)).'_PARTITION_SIZE'; need((-s "$c/$n")<=$ENV{$key},"Image exceeds target partition: $n") }
+     for my $n(keys %{$r->{vendor_modules}}) { need($n !~ m{/|^\.\.?$},'Unsafe module path in provenance'); need(sha("$install/$n") eq $r->{vendor_modules}{$n},"Module checksum mismatch: $n") }
+@@ -418,14 +439,15 @@ if($action eq 'stage') {
+     write_raw("$k/floppy-vendor-files.txt",join("\n",sort keys %{$r->{vendor_modules}})."\n");
+     save_json("$k/floppy-preserved.json",{source_commit=>$r->{commit},target=>$t,compiled_release=>$r->{compiled}{release},mali=>$r->{compiled}{mali_version},
+         ($published?(published_cohort=>$published,source_inputs=>$r->{source_inputs}):()),
+-        input_images=>$r->{images},uname_spoof_version=>'5.15.206',uname_source_inputs=>source_hashes(1,1,1),userdata_encryption_policy=>'unencrypted',bpf_uname_spoof_mode=>2,bpf_boot_option_order_fixed=>JSON::PP::true,bpf_compiled_full_default=>JSON::PP::true,bpf_bind_flags_backport=>JSON::PP::true,
++        input_images=>$r->{images},uname_spoof_version=>'5.15.206',uname_source_inputs=>source_hashes(1,1,1),userdata_encryption_policy=>(($ENV{TARGET_PRESERVE_DATA_ENCRYPTION}//'false') eq 'true'?'target-fbe':'unencrypted'),bpf_uname_spoof_mode=>2,bpf_boot_option_order_fixed=>JSON::PP::true,bpf_compiled_full_default=>JSON::PP::true,bpf_bind_flags_backport=>JSON::PP::true,
+         vendor_modules=>$r->{vendor_modules},reused_existing_source_build=>JSON::PP::true,stock_fallback=>JSON::PP::false,physical_boot_validated=>JSON::PP::false,
+         note=>'Normal fs adaptation/repacking/signing follows; mode 2 keeps the existing root BPF-loader caller gates.'});
+-    print "[floppy] Staged retained kernel/r54, uname target 5.15.206; root BPF-loader mode 2 with cgroup bind flags; userdata unencrypted\n"; exit 0;
++    print "[floppy] Staged retained kernel/r54, uname target 5.15.206; root BPF-loader mode 2 with cgroup bind flags; userdata policy recorded in receipt\n"; exit 0;
+ }
+ if($action eq 'userdata') {
+     my($path,$receipt)=@ARGV; my $p=policy(json($receipt));
+     if($p eq 'unencrypted') { my $updated=rewrite(raw($path),undef); unencrypted($updated,'Target vendor'); write_raw($path,$updated) }
++    else { my $r=rows(raw($path)); need(scalar(grep(/^fileencryption=/,split /,/,$r->{'/data'}[4])),'Target vendor has no reviewed FBE configuration') }
+     print "[floppy] Applied vendor userdata policy $p; no device data changes\n"; exit 0;
+ }
+ if($action eq 'fstab') {
+diff --git a/platform/exynos2100/patches/floppy/source/0001-Retain-the-UN1CA-source-overlay.patch b/platform/exynos2100/patches/floppy/source/0001-Retain-the-UN1CA-source-overlay.patch
+index 94c4e694314d9d25b38e7b1ab2329d4c4612973d..ed2948d9a668fd31d36cf0346e515f1dde7af2d2 100644
+--- a/platform/exynos2100/patches/floppy/source/0001-Retain-the-UN1CA-source-overlay.patch
++++ b/platform/exynos2100/patches/floppy/source/0001-Retain-the-UN1CA-source-overlay.patch
+@@ -555,7 +555,7 @@ index b51bfac3f..7ded412d9 100644
+  static char mass_storage_hack_default_arg[] = "mass_storage_hack=0";
+  static int selinux_mode = FK_SELINUX_MODE_DEFAULT;
+ -static char selinux_mode_default_arg[] = "selinux_mode=0";
+-+static char selinux_mode_default_arg[] = "selinux_mode=2";
+++static char selinux_mode_default_arg[] = "selinux_mode=1";
+  static int default_sbwc_mode = FK_SBWC_MODE_FULL;
+  static char default_sbwc_mode_default_arg[] = "default_sbwc_mode=0";
+  static bool init_protection = true;
+diff --git a/platform/exynos2100/patches/floppy/source/0002-Pin-the-retained-configuration.patch b/platform/exynos2100/patches/floppy/source/0002-Pin-the-retained-configuration.patch
+index 6335a79ba73d06553fc0c35284ae342a58ea9a84..99e2a72374809936474955adb3bcbecb12be5bd5 100644
+--- a/platform/exynos2100/patches/floppy/source/0002-Pin-the-retained-configuration.patch
++++ b/platform/exynos2100/patches/floppy/source/0002-Pin-the-retained-configuration.patch
+@@ -1,8 +1,8 @@
+ Subject: [PATCH] configs: retain the resolved UN1CA One UI 9 build choices
+ 
+ Start from the original 14-line unica.config input, not the cached full
+-.config. Select the always-permissive choice actually used by the retained
+-cohort, then the companion 5.15.206 uname choice. The upstream builder adds
++.config. Select the always-enforcing choice for the experimental secure cohort,
++then the companion 5.15.206 uname choice. The upstream builder adds
+ ksu.config and droidspaces.config and sets LOCALVERSION as before.
+ 
+ diff --git a/arch/arm64/configs/unica.config b/arch/arm64/configs/unica.config
+@@ -13,8 +13,8 @@ new file mode 100644
+ +CONFIG_SECURITY_SELINUX=y
+ +CONFIG_SECURITY_SELINUX_DEVELOP=y
+ +# CONFIG_SECURITY_SELINUX_MODE_DEFAULT is not set
+-+# CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE is not set
+-+CONFIG_SECURITY_SELINUX_ALWAYS_PERMISSIVE=y
+++CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE=y
+++# CONFIG_SECURITY_SELINUX_ALWAYS_PERMISSIVE is not set
+ +CONFIG_MALI_MIDGARD_R54P3=m
+ +CONFIG_MALI_VERSION_SELECTOR=y
+ +CONFIG_DMABUF_HEAPS_ION_COMPAT=y
+diff --git a/platform/exynos2100/patches/floppy/source/0004-Enforce-FCM5-and-embed-actual-config.patch b/platform/exynos2100/patches/floppy/source/0004-Enforce-FCM5-and-embed-actual-config.patch
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a2215021cce9256d962afe53791abfc52b36b12
+--- /dev/null
++++ b/platform/exynos2100/patches/floppy/source/0004-Enforce-FCM5-and-embed-actual-config.patch
+@@ -0,0 +1,69 @@
++Subject: [PATCH] p3s: strict FCM5 configuration, CFI LTO and truthful IKCONFIG
++
++diff --git a/Makefile b/Makefile
++--- a/Makefile
+++++ b/Makefile
++@@ -920,7 +920,12 @@
++ 
++ ifdef CONFIG_LTO_CLANG
++ ifdef CONFIG_THINLTO
++-CC_FLAGS_LTO_CLANG := -flto=thin -funified-lto -fno-split-lto-unit
+++CC_FLAGS_LTO_CLANG := -flto=thin -funified-lto
+++ifdef CONFIG_CFI_CLANG
+++CC_FLAGS_LTO_CLANG += -fsplit-lto-unit
+++else
+++CC_FLAGS_LTO_CLANG += -fno-split-lto-unit
+++endif
++ ifneq ($(KERNEL_BUILD_JOBS),)
++ KBUILD_LDFLAGS += --thinlto-jobs=$(KERNEL_BUILD_JOBS) --threads=$(KERNEL_BUILD_JOBS)
++ endif
++diff --git a/kernel/Makefile b/kernel/Makefile
++--- a/kernel/Makefile
+++++ b/kernel/Makefile
++@@ -139,7 +139,7 @@
++ 
++ filechk_cat = cat $<
++ 
++-$(obj)/config_data: arch/arm64/configs/exynos2100-r9sxxx-stock_defconfig FORCE
+++$(obj)/config_data: $(KCONFIG_CONFIG) FORCE
++ 	$(call filechk,cat)
++ 
++ $(obj)/kheaders.o: $(obj)/kheaders_data.tar.xz
++diff --git a/kernel/sched/debug.c b/kernel/sched/debug.c
++--- a/kernel/sched/debug.c
+++++ b/kernel/sched/debug.c
++@@ -79,6 +79,7 @@
++ struct static_key sched_feat_keys[__SCHED_FEAT_NR] = {
++ #include "features.h"
++ };
+++EXPORT_SYMBOL_GPL(sched_feat_keys);
++ 
++ #undef SCHED_FEAT
++ 
++diff --git a/build/scripts/build.sh b/build/scripts/build.sh
++--- a/build/scripts/build.sh
+++++ b/build/scripts/build.sh
++@@ -35,6 +35,8 @@
++     [ "$DO_XXKSU" = "1" ] && FRAGMENTS="$FRAGMENTS xxksu.config"
++     [ "$DO_NHMOD" = "1" ] && [ "$DO_REGEN" != "1" ] && FRAGMENTS="$FRAGMENTS nethunter.config"
++     [ "$DROIDSPACES" = "1" ] && [ "$DO_REGEN" != "1" ] && FRAGMENTS="$FRAGMENTS droidspaces.config"
+++
+++    FRAGMENTS="$FRAGMENTS ${FINAL_CONFIG_FRAGMENTS:-}"
++ 
++     MAKE_JOBS="-j${KERNEL_BUILD_JOBS:-$(nproc --all)}"
++     MAKE_COMMON_ARGS=(
++diff --git a/arch/arm64/configs/p3s_matrix.config b/arch/arm64/configs/p3s_matrix.config
++new file mode 100644
++--- /dev/null
+++++ b/arch/arm64/configs/p3s_matrix.config
++@@ -0,0 +1,10 @@
+++CONFIG_DEBUG_LIST=y
+++# CONFIG_MODULE_FORCE_UNLOAD is not set
+++CONFIG_SCHED_DEBUG=y
+++# CONFIG_SYSVIPC is not set
+++# CONFIG_DEBUG_FS is not set
+++# CONFIG_ZSMALLOC_STAT is not set
+++CONFIG_SHADOW_CALL_STACK=y
+++CONFIG_CFI_CLANG=y
+++CONFIG_CFI_CLANG_SHADOW=y
+++# CONFIG_CFI_PERMISSIVE is not set
+diff --git a/platform/exynos2100/patches/miscs/customize.sh b/platform/exynos2100/patches/miscs/customize.sh
+index ecc844116a8f10bf46455bfdf5a70a545dd0d468..68b881b9fe24768663172ebc6156b2f068e03681 100644
+--- a/platform/exynos2100/patches/miscs/customize.sh
++++ b/platform/exynos2100/patches/miscs/customize.sh
+@@ -6,14 +6,16 @@ if [ -f "$WORK_DIR/kernel/floppy-preserved.json" ]; then
+     # Apply the staged userdata policy before the fs module adapts both ramdisks.
+     bash "$SRC_DIR/platform/$TARGET_PLATFORM/patches/floppy/customize.sh" userdata \
+         "$WORK_DIR/vendor/etc/fstab.exynos2100" "$WORK_DIR/kernel/floppy-preserved.json" || return 1
+-else
++elif [ "${TARGET_PRESERVE_DATA_ENCRYPTION:-false}" != true ]; then
+     LOG "- Disabling encryption"
+     LINE=$(sed -n "/^\/dev\/block\/by-name\/userdata/=" "$WORK_DIR/vendor/etc/fstab.exynos2100")
+     sed -i "${LINE}s/,fileencryption=aes-256-xts:aes-256-cts:v2//g" "$WORK_DIR/vendor/etc/fstab.exynos2100"
+ fi
+ 
+ # ODE
+-sed -i -e "/ODE/d" -e "/keydata/d" -e "/keyrefuge/d" "$WORK_DIR/vendor/etc/fstab.exynos2100"
++if [ "${TARGET_PRESERVE_DATA_ENCRYPTION:-false}" != true ]; then
++    sed -i -e "/ODE/d" -e "/keydata/d" -e "/keyrefuge/d" "$WORK_DIR/vendor/etc/fstab.exynos2100"
++fi
+ 
+ LOG_STEP_IN "- Fixing vendor display props"
+ # DPI
+diff --git a/platform/exynos2100/patches/zygote/customize.sh b/platform/exynos2100/patches/zygote/customize.sh
+index 6c5eddde9372e162611b169c142ae5b7be891422..8842290962f5a28c4c7404b1fe2eff782d5b8cfd 100644
+--- a/platform/exynos2100/patches/zygote/customize.sh
++++ b/platform/exynos2100/patches/zygote/customize.sh
+@@ -67,3 +67,12 @@ fi
+ ADD_TO_WORK_DIR "$MODPATH/payload" "system" "system/lib64/libunica_zygote_cap.so" \
+     0 0 644 "u:object_r:system_lib_file:s0"
+ ZYGOTE_CAP_IMPORT "$WORK_DIR/system/system/lib64" || return 1
++
++if [ "$TARGET_CODENAME" = p3s ]; then
++    ZYGOTE_PLAT_POLICY="$WORK_DIR/system/system/etc/selinux/plat_sepolicy.cil"
++    if grep -q '^[(]type p3s_proc_cap_last_cap[)]$' "$ZYGOTE_PLAT_POLICY"; then
++        ABORT "Unexpected existing p3s capability-boundary policy"
++    fi
++    cat "$MODPATH/source/p3s-cap-boundary.cil" >> "$ZYGOTE_PLAT_POLICY" || return 1
++    unset ZYGOTE_PLAT_POLICY
++fi
+diff --git a/platform/exynos2100/patches/zygote/payload/helper.json b/platform/exynos2100/patches/zygote/payload/helper.json
+index 36642c1bb25af2f0c3b50a6a31a8ef1328be925c..a4b631d3cf290453384d69d5ae84c675bbe14348 100644
+--- a/platform/exynos2100/patches/zygote/payload/helper.json
++++ b/platform/exynos2100/patches/zygote/payload/helper.json
+@@ -1,7 +1,36 @@
+ {
+-  "source_sha256": "1fb072a76ac70701c40b456a40ff6b4690e0c9233c92630c364756e02560025c",
+-  "helper_sha256": "d1c0943837ffdf98186b1e8e2440d74fb6cbaf3cc454b010906bb857b88d1ed8",
++  "source_sha256": "ad1629343d31b9567fffe2468b0c2003eba7ee88d8410afec300d0153a71e774",
++  "helper_sha256": "c2291071a2300ac2aa89babd757bcc0afe31c35981dbac472eb87cee21cc162d",
+   "compiler": "Android (15682573, +pgo, +bolt, +lto, +mlgo, based on r596125) clang version 22.0.2 (https://android.googlesource.com/toolchain/llvm-project de03d430485c884861198b25459851f429cbdbad)",
+   "target": "aarch64-linux-android37",
+-  "no_global_libc_or_prctl_override": true
++  "bionic_commit": "06356e41c5ed7b12220b24c05ba4fdb873b126a7",
++  "deterministic_second_build_matches": true,
++  "host_behavior_tests_passed": 16,
++  "global_exports": [
++    "__unica_zygote_cap_get_bound"
++  ],
++  "actual_donor_imports_verified": [
++    "__errno@LIBC",
++    "__open_2@LIBC",
++    "__stack_chk_fail@LIBC",
++    "cap_get_bound",
++    "close@LIBC",
++    "read@LIBC"
++  ],
++  "needed": [
++    "libc.so",
++    "libcap.so"
++  ],
++  "no_global_libc_or_prctl_override": true,
++  "stack_protector_enabled": true,
++  "fortify_enabled": true,
++  "load_alignment_minimum": 16384,
++  "link_provider_sha256": {
++    "donor-review-bzja/apex64-review/com.android.runtime/lib64/bionic/libc.so": "a99e1701776f56b75a5213097f45c8e83eabacd2980e86313569247ae6766495",
++    "donor-review-bzja/selected/system_a/system/lib64/libcap.so": "d10016a1dffb181b852e2264a2083ece4de4eae31960eb702cdb48c7602df285"
++  },
++  "build_recipe_sha256": "c5878e37aff36a4aa730d5eda91c6188c729c2803bd576d2872cd67392171b2e",
++  "physical_boot_validated": false,
++  "retained_build_recipe_sha256": "1b3f5cd0a1557b1978cb1767353533de39b6aa30390a56e5af42b08b100b5236",
++  "retained_host_test_sha256": "202f95e8a4dc08e8c17e72d7234c969f2d597441259446e9b696d3426d6df0c4"
+ }
+diff --git a/platform/exynos2100/patches/zygote/payload/system/system/lib64/libunica_zygote_cap.so b/platform/exynos2100/patches/zygote/payload/system/system/lib64/libunica_zygote_cap.so
+index c3841bd96cb2377428141db99ee4b0a069290e0b..4c35155f02d98eedd70fe17567c809391cd45af3 100755
+GIT binary patch
+literal 4568
+zcmcIoU2GKB6+Sa-z<}eL1P2<Y*@0M9?BZQ}vB?5Tx;Tay*Ck+Wk|zBbW@pB`8;^I^
+zyW`XjQEP=tArF<HB`IxGg4&0A)2Ax^5vr;<ks|daQc(hJ6H%E~eMs{XRG@2!*`71^
+z9(z1u+eB55nLYP>=Y02`x&Onr_YUt<6$Mx#@EcgR08-L%s)-{AOTt?GZG}5vHNp+}
+zq@+8ntFkiIjWUj4;?<M(Rl>uX8z3IJ7;oPz<D|Y@6*lW2k8(||5&qQkD|JrhImZd6
+zgrBPWPdrWXSTlX(@1EuN%O`A4Rs#nmZ&r3rSZ@?*0c-BVL&&2%Kdlg-o}}!zux^(X
+zvZh!P(v(94pN9`T3itl)(Ae=`?jE{&`ls(*{Q1xBdg|j1Z=tKM+=HImZ{huX9lW;=
+z{y-hPzYacF2dDnO9h!jW(@7o>P;ot|@=w9C0#9IU3qB;~Z8RHIFnkNp3qV6o`YwTK
+z6inE~#?!BXu1^;7rlCJGopn81H;tm6wLLxKP8KY5+NDy#g)r(C?Sh_wl5JREI&Rs<
+z$g*dcW4f6e(?^ZG15Q3;#>y@X@9%%eH;f{g2#4Dv7^aSi<WwBUrB_90CV<N+;RhZI
+z;56ne#{)Re4f34|;M7AbX99R|zQ&6s*Nm5^%keS0RIr^mb%A4)J?bGOD{Yb8G~X!K
+zXHx*%P?PXDD9?<5^6WiITT>JU5#Nl@U<$w=$ARV<<!eo!JN$k1WW$TAUuyipx>HR*
+zZ2nQp%NtMM`Qy#&)OVYr7|;ywynFt_AOG~{_ul`@#ewx$fs|TAJ-2v7t=wpXh3nad
+zN>yJ~x%T+#%9TgfR2GlIiO2r1`}~y%bpHO%)WYo1Xw}4K{~3W-H$&>|d}L!M+22%C
+zXJ7dVOdM-~bhH6__Momk2@?wH1>{Dx$octyEw(7inUSwzycVh6e--gd_ri(!NNcC6
+z&Wzx^J9!4Gzs_M@(G4)6)oSV6a2YnH;9T?p_{Dw&($}%wOHsku3Ns_a#8FprsJ<b@
+z=Odr(tVT9<PN{H~a<3fKt5Id`hsr8QUwPzVeBac<wa542`|hn=&kj@;kMvitFHX!w
+z^b0qz9jYgZ^}N4W`_<qYIQIeO+L6yCzt{m2TNZ0+eLY<M5OexRB-%;7FDWx4+gek}
+z?|uM>UhjaO$j7zxP|x}{{dda5?2THwaTQ!1dIJt!x>-x(+}lXJSJZW5l;_*mYw3Bk
+z&(~_3qSz*n%|}OGuXF<(->_?7q2<jjCp0yBf%=jk-}fN;{wjRF-H*1q)sOY<eQ0kD
+z*h6Ud2kZlAX9D&J+Rq7_*ADFoBy5ig6Pl$iN=^G7NuyA3qgKP!xXjxm@v2;8yata;
+zoY&rAxsGT}kjP`kKdZ<-EQvggX+4neS}e+n)(IG%m-^~Wk<UTt|48PiN&BX>yQN(V
+z<u9xGuWD|e2>GNM_7tp=o42(4dir)G6Mgq@-==+`n04_t<2oKH$0K9hAuMB*ZA)_t
+zTB&d6j-Etchh{oPA*(%Ym&$pB6Ny-NETP?(^SoktS3GWr%41pA%{q43oh+Gl%yh@&
+zp6fbh&d3+yj`Q?*7j9Bd*`}vicK3FxcYAklvd>H=dy_kQdUhr=iN4;xoyoqQ(cZ*P
+zGh<~8s{@Af1>DefX~V+<ORdJo3trsHm&eNS%w*oNx~Lp4m&~|mzv$RgT{0!nu6&KI
+zlI_^|YH@ecTal1&e2T2<4-d`X2Dn@cN3{CD^7+VqF|XDF?rSTg&9^qJz{n8ue?82F
+z;-|@}HUr<w$Ryc<&#lho2Ys9(Rtin4Tiq+tb?~p(!83L6Tpb)@1w77U*}`N@jA`D2
+zm^ED}PmhC-%Bi=)&`ZM18ReXa_7K5AHi#-qMaRREYZ;yaF*~P^mW***&siAB7Q{Sz
+z3Zwi`WE$gn6Ki%ofnbFtS1%ftl`mw0=JmK;z;MjXGcu@iWv?VkLW8)Rbm7t4h0#UB
+zi<!_q1?`sn_y4-Y=mSq2*z@K64`C<&k3#d9_C(%4>)mU)nb36f@3ypeGN1QT)^n0b
+zcNl7m_jBH7??#OFM&|SW$+|`I*&o&&=%>Awao%rPYm(3Hhx5mC8LkERyq~jXKG)Cr
+z%W9z?3$(?vzbN;6)_h)YJoQ0P@P6TcBQT%OGuFXaDs%hXf3#ldohT0y=CS7Ukm~;o
+zK4Jbh5Tl$D_>l1a#G21x;axs|`8`I_L1oT=R(3FJK6jZP?td@D=lzbg#YCw&e}=y$
+z`82*H{9VG|z02Px!XIw`I|x($$k!-h>711n&JY+7o{tQ@fCUPb!@jgHr{qOLlO4tR
+zasFJ-_mE2=%;)>cVHr4xzMwFlv6rzx81rY33D2wy{EEzj<7GN*!mC&!ta}L&1?C?J
+z5!ht?8iw=O2dk*A71lu+Nb`VF;rx02{uVLLT`<J&puCX19R#t=?J`Us&$r^Y%KwLX
+Kjsv9*^ZyNWBzR;1
+
+literal 4208
+zcmb_fZERCz6h6HjP`5$G93OF!UJV*HS-X}EI*ihNK=_!zW{u!iz3siUb+^4;dp9>A
+zVbMhWW8xwTng|R2S^eclR4_3N{pSx8R3?%@hS5ay4@4jX-0C^K@9DZ`6%D@I?em`J
+zoag<z?>+au2R3$Yl595MVu#OR#scsQN3wz=i1UF1e`}x`<|AE(mtVMxaZEJE=n!#4
+zlde?RFPx0r0qN%9#r*ybs|ChiM1PEhIvVTq^h5Yc5enVNT^7$e3C(}f$wJ4-^XvZA
+zRA~zTwm;Df>=ZhOn13<Wh~Y7cFz7;^n3{;VGgyK0>N%Qtums;!f^R9oKU#vPb*P34
+z;QOib!hi%eyy%Z88~)L)ufmH;cp>cy2|9BY`K|j#c#p-&6ijP$-f`p;2nPESv9J={
+zI~XxcEf`jk!H8xCLq=ahMW>cZB@CF&8c8hyDNRu!tQ%<!^jIkDN*mC*rL8?@C`mGr
+zE^eA=s~mpSLJ4nNeriaK6!5g?xQrI?b|w)&EZ}($ko$N6Pb<R3olF^FcX}}G?$J^S
+zO?T7ObR})l%rVGTYk!#b6phLB1FS}*!s~0>+YPq;D{Qru&fKH19DRO2K<@r@EK2UG
+zym#lD(!sK~=D+PYRDQVfokj0f9jSh=rd&E+=}hig1mFK~X8gyqKb^a9zJpUq_G{be
+zseMxBX2hPE43=fCKRGXRb;tb7)XOk@)eiN~0v!C)4j(K9|A`5EP0oH%@}D?*40>NH
+zgMhOPJgtb?r=Zt{IEfmkY(FzHIaOt|jdVYOdf7g??i%tJ+hKUZzNB7~hPod|egq~z
+zi(*^O#n3Bfvw?*GH4Z<Vc0K|hZLvY%2KIY#gQdA2hPpSQ2Bg^<Y7h6|!3q2F`s?;(
+z_5Bi@xVmE#&SN9arvvBJo|)R$mce-rkJ*FcH?d99tV7M->FlSg7QpFCIIg-_)VHAy
+zdQVMd0~;#f${*PO?{;TB`L@}Hx>qmp`(D2UT_@|n^ZsAiz*bL1ZSYH5?`Et!=E0S%
+zr=aWNbT)wdriOG!rScvcQ~XvoFoE{DY<3ylODdQ5oy;@>ys`M3_8V1gD~4ssIZkWF
+zSI+k>`a+g3XMczGO9l2g+Q$m)b7+56U|&G{XUpb2PR}Y8w!177772V>Amtq@oJVhE
+zv$;oybv%)zco_Iu8L(u)&&ZH?4meLP5dM6Q6hhvMw4bT)Gczgt<rWPof!C(3@thU@
+z%VK<^!k!lPabahR#xI(=EnMDch1?FIHKC@Am@2RGG_Un}o7b&bEkBfu82B49bQ3{0
+z$%yO3g_N|W%0@y?HMgwwc$@3wu&yK`a=(^J$B_1VU5zfUyeev%$@F@+Td^8<MGPaN
+zYiXk|71mr~Bknd0Lk~xlSi-IA{qY7&E-z?dQ&zRcHEPqE#wK5L*yn5Vt@U_Xd?9ah
+zQ*(>2*|Vp~+Y%0`Aw{i&&R7By(R#VFvm@WDJDxDzYAoH8c8B_6y4pZ>cRCezTm2_>
+zZJ<F6$?8{3qamf~8cxk^^qI2;lr#Rrs7l`!+J9wmC0iV^BuC7=uh?(xCkOn-8&WuG
+zbI4hhqXDdaUk-9%GDo*cA=1M9d4(1CVP&rOWU2Qm=C3*5=YbOZ?h^cSC3tYDgNgKD
+z99)q^pG)kgSw=8rnNcMjwW3XA@XjeD6}6;pV$Dz$QvsJ24em)PaV;2CF_JBCnc4tG
+z<w8-Z#A9J>*)S~z8%!C&q@t>^L<DHF#<c{7<Je3kgcwbmDXV57SSNr6d=EBYbW$;0
+zVOTi;D^>CTKb#bT9lN);KDMPD7w--W?L*30BE8I11TiYwr#wcnoJTpo(eajY66-l{
+zF>*d8EftPqT#6j!IJP;@G0G&u!u=O*XLta8*9-KVM;T=jW8waJ{1yw~#tJ=B-2bGg
+zFmj&ecy5PneD~(QJ6O-}5k`(<<o<d6T7|w%1h9^AK=9Nrt!1%(8*=3H;zfn?10%ox
+zEbq)Z@I3JBlGF3}OMM@(zIgqWB0c9D#%EY4kjKw-kI?gbl+Wq>JvMV*w-m+w_s-~L
+zipam;Xv1JhT9E%O&XoP=p}sk-=D*{_fMl^yqPhI~b2|r6OChZ1bHb1~Ao$T&Sc>QW
+z8ajz%{g^msjIq8*!1s;YJcJeE8krEt`t3ymHW^1Sp6`8O6IJ57)h7b)Mkfu4hr|1K
+j6geJyp?<SC=zLK~Vx9YC`eUrjrI*A(D$aodi}im4qufAP
+
+diff --git a/platform/exynos2100/patches/zygote/source/build-helper.sh b/platform/exynos2100/patches/zygote/source/build-helper.sh
+new file mode 100644
+index 0000000000000000000000000000000000000000..c63f44e3130e60638f45f81de2ab6e50ba494b0b
+--- /dev/null
++++ b/platform/exynos2100/patches/zygote/source/build-helper.sh
+@@ -0,0 +1,19 @@
++#!/bin/bash
++# Rebuild the private ARM64 helper with reviewed Android bionic headers/providers.
++set -euo pipefail
++if [ "$#" -ne 5 ]; then
++    echo "Usage: $0 <pinned-clang> <bionic-source> <donor-libc.so> <donor-libcap.so> <new-output.so>" >&2
++    exit 1
++fi
++compiler="$1"; bionic="$2"; libc="$3"; libcap="$4"; output="$5"
++test ! -e "$output"
++source_dir="$(dirname "$(readlink -f "$0")")"
++resource="$("$compiler" -print-resource-dir)"
++"$compiler" --target=aarch64-linux-android37 -O2 -fPIC -fvisibility=hidden \
++    -fstack-protector-strong -D_FORTIFY_SOURCE=2 -shared -nostdlib -nostdinc \
++    -isystem "$resource/include" -isystem "$bionic/libc/include" \
++    -isystem "$bionic/libc/kernel/uapi" -isystem "$bionic/libc/kernel/uapi/asm-arm64" \
++    -isystem "$bionic/libc/kernel/android/uapi" \
++    "$source_dir/zygote-cap-compat.c" "$libc" "$libcap" \
++    -fuse-ld=lld -Wl,-z,defs,-z,relro,-z,now,-z,noexecstack,-z,max-page-size=16384 \
++    -Wl,--build-id=sha1,-soname,libunica_zygote_cap.so -o "$output"
+diff --git a/platform/exynos2100/patches/zygote/source/check-cap-policy.c b/platform/exynos2100/patches/zygote/source/check-cap-policy.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..36fcd28cbd91119be0e5167fbeb795dcf5b84135
+--- /dev/null
++++ b/platform/exynos2100/patches/zygote/source/check-cap-policy.c
+@@ -0,0 +1,80 @@
++#include <sepol/policydb/services.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++int main(int argc, char **argv) {
++    if (argc != 2 && argc != 3) return 2;
++    FILE *input = fopen(argv[1], "rb");
++    if (!input || fseek(input,0,SEEK_END)) return 3;
++    long length = ftell(input);
++    if (length < 1 || length > 256*1024*1024 || fseek(input,0,SEEK_SET)) return 3;
++    void *data = malloc((size_t)length);
++    if (!data || fread(data,1,(size_t)length,input)!=(size_t)length) return 3;
++    fclose(input);
++    if (sepol_load_policy(data,(size_t)length)) return 4;
++    unsigned checked_contexts=0, invalid_contexts=0;
++    if (argc == 3) {
++        FILE *labels=fopen(argv[2],"r");
++        if (!labels) return 10;
++        char label[4096];
++        while (fgets(label,sizeof(label),labels)) {
++            size_t length=strlen(label);
++            if (!length || label[length-1]!='\n') return 10;
++            label[length-1]=0;
++            if (!*label) continue;
++            sepol_security_id_t context_sid;
++            ++checked_contexts;
++            if (sepol_context_to_sid(label,strlen(label)+1,&context_sid)) {
++                fprintf(stderr,"Invalid filesystem context: %s\n",label);
++                ++invalid_contexts;
++            }
++        }
++        fclose(labels);
++    }
++    sepol_security_class_t file_class;
++    if (sepol_string_to_security_class("file",&file_class)) return 5;
++    sepol_access_vector_t requested=0,bit=0;
++    const char *permissions[]={"open","read","getattr"};
++    for (unsigned i=0;i<3;++i) {
++        if (sepol_string_to_av_perm(file_class,permissions[i],&bit)) return 5;
++        requested |= bit;
++    }
++    sepol_access_vector_t forbidden=0;
++    const char *forbidden_names[]={"write","append","execute"};
++    for(unsigned i=0;i<3;++i) {
++        if (sepol_string_to_av_perm(file_class,forbidden_names[i],&bit)) return 5;
++        forbidden |= bit;
++    }
++    sepol_security_class_t dir_class;
++    sepol_access_vector_t search=0;
++    if (sepol_string_to_security_class("dir",&dir_class) || sepol_string_to_av_perm(dir_class,"search",&search)) return 5;
++    sepol_security_id_t target;
++    if (sepol_genfs_sid("proc","/sys/kernel/cap_last_cap",file_class,&target)) return 6;
++    char *target_context=0; size_t context_length=0;
++    if (sepol_sid_to_context(target,&target_context,&context_length)) return 6;
++    printf("{\"file_context_labels_checked\":%u,\"invalid_file_context_labels\":%u,\"target_context\":\"%s\",\"domains\":[",checked_contexts,invalid_contexts,target_context);
++    const char *domains[]={"zygote","app_zygote","native_app_zygote","zygote_next","webview_zygote","shell"};
++    for(unsigned i=0;i<sizeof(domains)/sizeof(domains[0]);++i) {
++        char context[128]; snprintf(context,sizeof(context),"u:r:%s:s0",domains[i]);
++        sepol_security_id_t source;
++        if (sepol_context_to_sid(context,strlen(context)+1,&source)) return 7;
++        struct sepol_av_decision decision;
++        if (sepol_compute_av(source,target,file_class,requested|forbidden,&decision)) return 8;
++        int ancestor_search=1;
++        const char *ancestors[]={"/","/sys","/sys/kernel"};
++        for(unsigned ancestor=0;ancestor<3;++ancestor) {
++            sepol_security_id_t dir_sid;
++            struct sepol_av_decision dir_decision;
++            if (sepol_genfs_sid("proc",ancestors[ancestor],dir_class,&dir_sid) ||
++                sepol_compute_av(source,dir_sid,dir_class,search,&dir_decision)) return 8;
++            if ((dir_decision.allowed&search)!=search) ancestor_search=0;
++        }
++        printf("%s{\"domain\":\"%s\",\"open_read_getattr_allowed\":%s,\"write_append_execute_allowed\":%s,\"ancestor_search_allowed\":%s,\"allowed_mask\":%u,\"requested_mask\":%u}",
++            i?",":"",domains[i],(decision.allowed&requested)==requested?"true":"false",
++            (decision.allowed&forbidden)?"true":"false",ancestor_search?"true":"false",decision.allowed,requested);
++    }
++    puts("],\"kernel_runtime_verified\":false}");
++    free(target_context); free(data);
++    return invalid_contexts?9:0;
++}
+diff --git a/platform/exynos2100/patches/zygote/source/p3s-cap-boundary.cil b/platform/exynos2100/patches/zygote/source/p3s-cap-boundary.cil
+new file mode 100644
+index 0000000000000000000000000000000000000000..17f69e5d21bd8c748e11e13ea0831f36ffcda474
+--- /dev/null
++++ b/platform/exynos2100/patches/zygote/source/p3s-cap-boundary.cil
+@@ -0,0 +1,10 @@
++; Exynos2100 CAP_LAST_CAP is 39. The SDK37 Rust capability enum includes 40.
++; The private helper needs only this public read-only numeric boundary.
++; Do not grant access to generic proc files or capability mutations.
++(type p3s_proc_cap_last_cap)
++(roletype object_r p3s_proc_cap_last_cap)
++(typeattributeset fs_type (p3s_proc_cap_last_cap))
++(typeattributeset proc_type (p3s_proc_cap_last_cap))
++(genfscon proc "/sys/kernel/cap_last_cap" (u object_r p3s_proc_cap_last_cap ((s0) (s0))))
++(allow zygote_next p3s_proc_cap_last_cap (file (getattr open read)))
++(allow native_app_zygote p3s_proc_cap_last_cap (file (getattr open read)))
+diff --git a/platform/exynos2100/patches/zygote/source/test-cap-query-contract.c b/platform/exynos2100/patches/zygote/source/test-cap-query-contract.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..48244375f29c45b4c4b38c707c663e5ae4e25354
+--- /dev/null
++++ b/platform/exynos2100/patches/zygote/source/test-cap-query-contract.c
+@@ -0,0 +1,70 @@
++#include <assert.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <unistd.h>
++
++int __unica_zygote_cap_get_bound(int capability);
++static const char *mock_text;
++static size_t position, first_limit;
++static int native_result, native_errno, open_failure, interrupt_once, calls, read_calls;
++
++int cap_get_bound(int capability) {
++    (void)capability;
++    ++calls;
++    errno = native_errno;
++    return native_result;
++}
++int test_open(const char *path, int flags, ...) {
++    assert(strcmp(path, "/proc/sys/kernel/cap_last_cap") == 0);
++    assert(flags == (O_RDONLY | O_CLOEXEC));
++    if (open_failure) { errno = EACCES; return -1; }
++    return 17;
++}
++ssize_t test_read(int fd, void *target, size_t requested) {
++    assert(fd == 17);
++    ++read_calls;
++    if (interrupt_once) { interrupt_once = 0; errno = EINTR; return -1; }
++    size_t remaining = strlen(mock_text) - position;
++    size_t amount = remaining < requested ? remaining : requested;
++    if (position == 0 && first_limit && amount > first_limit) amount = first_limit;
++    memcpy(target, mock_text + position, amount);
++    position += amount;
++    return (ssize_t)amount;
++}
++int test_close(int fd) { assert(fd == 17); errno = EBADF; return 0; }
++
++static void check(const char *label, int capability, const char *text,
++                  int query_result, int query_errno, int failed_open,
++                  int interrupted, size_t limit, int expected, int expected_errno) {
++    mock_text = text; position = 0; first_limit = limit;
++    native_result = query_result; native_errno = query_errno;
++    open_failure = failed_open; interrupt_once = interrupted;
++    calls = read_calls = 0; errno = EACCES;
++    int actual = __unica_zygote_cap_get_bound(capability);
++    if (actual != expected || errno != expected_errno || calls != 1) {
++        fprintf(stderr, "%s failed: result=%d errno=%d calls=%d\n", label, actual, errno, calls);
++        _exit(1);
++    }
++    printf("PASS %s\n", label);
++}
++int main(void) {
++    check("unsupported-BPF-query",39,"37\n",-1,EINVAL,0,0,0,0,EACCES);
++    check("unsupported-checkpoint-query",40,"37\n",-1,EINVAL,0,0,0,0,EACCES);
++    check("implemented-error-preserved",37,"37\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("outside-pinned-enum-preserved",41,"37\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("negative-input-preserved",-1,"37\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("permission-error-preserved",39,"37\n",-1,EPERM,0,0,0,-1,EPERM);
++    check("native-success-preserved",36,"37\n",1,ERANGE,0,0,0,1,ERANGE);
++    check("unreadable-proc-preserved",39,"37\n",-1,EINVAL,1,0,0,-1,EINVAL);
++    check("interrupted-read-retried",39,"37\n",-1,EINVAL,0,1,0,0,EACCES);
++    check("trailing-data-rejected",39,"37\nx",-1,EINVAL,0,0,3,-1,EINVAL);
++    check("missing-newline-rejected",39,"37",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("negative-boundary-rejected",39,"-1\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("out-of-range-boundary-rejected",39,"64\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("empty-boundary-rejected",39,"",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("overlong-boundary-rejected",39,"1234567890123456\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    check("newer-kernel-error-preserved",39,"40\n",-1,EINVAL,0,0,0,-1,EINVAL);
++    return 0;
++}
+diff --git a/scripts/build_flashable_zip.sh b/scripts/build_flashable_zip.sh
+index a7e88946786cac6dc38d87deb539371703f60155..d668d72ce051083d950fe6943f9a8535b34a8dc1 100755
+--- a/scripts/build_flashable_zip.sh
++++ b/scripts/build_flashable_zip.sh
+@@ -57,7 +57,7 @@ PREPARE_SCRIPT()
+         EVAL "unzip -p \"$TARGET_ZIP\" \"build_info.txt\"" || exit 1
+         TARGET_BUILD_INFO="$(unzip -p "$TARGET_ZIP" "build_info.txt")"
+ 
+-        OUTPUT_FILE="$OUT_DIR/UN1CA_"
++        OUTPUT_FILE="${ROM_PACKAGE_DIR:-$OUT_DIR}/UN1CA_"
+         OUTPUT_FILE+="$(grep "^version" <<< "$TARGET_BUILD_INFO" | cut -d "=" -f 2 -s)"
+         OUTPUT_FILE+="_"
+         OUTPUT_FILE+="$(date -d "@$(grep "^timestamp" <<< "$TARGET_BUILD_INFO" | cut -d "=" -f 2 -s)" "+%Y%m%d")"
+@@ -89,6 +89,11 @@ PRINT_USAGE()
+ 
+ PREPARE_SCRIPT "$@"
+ 
++if [ "$TARGET_CODENAME" = p3s ] && [ "$SOURCE_PLATFORM_SDK_VERSION" -eq 37 ]; then
++    python3 "$SRC_DIR/scripts/internal/check_p3s_target_boot.py" "$TARGET_ZIP" \
++        "$FW_DIR/SM-G998B_AUT/kernel/vendor_boot.img" || exit 1
++fi
++
+ if $INCREMENTAL; then
+     "$SRC_DIR/scripts/internal/build_incremental_ota_zip.sh" "$SOURCE_ZIP" "$TARGET_ZIP" "$OUTPUT_FILE" || exit 1
+ else
+diff --git a/scripts/internal/build_full_ota_zip.sh b/scripts/internal/build_full_ota_zip.sh
+index 75f2d5a0ed88df2efb2362641b5ae3515b399d8c..a012c36bb8ea82724b147cca9e0b7cb5360271e6 100755
+--- a/scripts/internal/build_full_ota_zip.sh
++++ b/scripts/internal/build_full_ota_zip.sh
+@@ -6,6 +6,10 @@
+ source "$SRC_DIR/scripts/utils/install_utils.sh" || exit 1
+ 
+ TMP_DIR="$OUT_DIR/target/$TARGET_CODENAME/zip"
++if [ -n "${ROM_BUILD_TMP_ROOT:-}" ]; then
++    [[ "$ROM_BUILD_TMP_ROOT" = /mnt/d/Codex-ROM/p3s/build-beta2-r3 ]] || { echo "Unreviewed build temporary root" >&2; exit 1; }
++    TMP_DIR="$ROM_BUILD_TMP_ROOT/full-ota"
++fi
+ 
+ PRIVATE_KEY_PATH="$SRC_DIR/security/"
+ PUBLIC_KEY_PATH="$SRC_DIR/security/"
+@@ -179,18 +183,18 @@ GENERATE_UPDATER_SCRIPT()
+                 echo -n 'ui_print("Full Patching '
+                 echo -n "$b.img img..."
+                 echo    '");'
+-                echo -n 'package_extract_file("'
++                echo -n 'assert(package_extract_file("'
+                 echo -n "$b.img"
+                 echo -n '", '
+                 GET_DEVICE_FROM_MOUNTPOINT "/$b"
+-                echo    ");"
++                echo    '));'
+             fi
+         done
+         if [ -f "$TMP_DIR/boot.img" ]; then
+             echo    'ui_print("Installing boot image...");'
+-            echo -n 'package_extract_file("boot.img", '
++            echo -n 'assert(package_extract_file("boot.img", '
+             GET_DEVICE_FROM_MOUNTPOINT "/boot"
+-            echo    ");"
++            echo    '));'
+         fi
+ 
+         echo    'show_progress(0.100000, 10);'
+@@ -282,6 +286,10 @@ if [ -f "$SRC_DIR/target/$TARGET_CODENAME/installer/customize.sh" ]; then
+     LOG_STEP_OUT
+ fi
+ 
++if [ "$TARGET_CODENAME" = p3s ] && [ "$SOURCE_PLATFORM_SDK_VERSION" -eq 37 ]; then
++    python3 "$SRC_DIR/scripts/internal/check_p3s_avb_metadata.py" "$TMP_DIR" || exit 1
++fi
++
+ LOG "- Creating zip"
+ EVAL "rm -f \"$TMP_DIR/rom.zip\"" || exit 1
+ # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/common.py#3601
+diff --git a/scripts/internal/check_p3s_avb_metadata.py b/scripts/internal/check_p3s_avb_metadata.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..fa587b1cf6f2159bfc7f51716ebf5a31fadddb2f
+--- /dev/null
++++ b/scripts/internal/check_p3s_avb_metadata.py
+@@ -0,0 +1,15 @@
++"""Pin reviewed p3s top-level and signed chained AVB metadata separately."""
++from pathlib import Path
++import hashlib,json,struct,sys
++ROOT='f111567249c567e73230fedbfc768c3b8398568de9efbb027f72d39b98ac619e'
++CHILD='5be409f10bace1c3bf68410ae48f9fa3f978750640a44f204d4817c687e7338f'
++def validate(root,child):
++ for name,data in [('vbmeta',root),('vbmeta_system',child)]:
++  if len(data)!=65536 or data[:4]!=b'AVB0':raise ValueError('Missing/truncated AVB metadata: '+name)
++ if struct.unpack_from('>I',root,120)[0]!=2 or struct.unpack_from('>I',root,28)[0]!=0:raise ValueError('Unreviewed top-level verification profile')
++ if struct.unpack_from('>I',child,120)[0]!=0:raise ValueError('Chained AVB image must have zero flags')
++ if hashlib.sha256(root).hexdigest()!=ROOT:raise ValueError('Top-level image differs from reviewed known-working profile')
++ if hashlib.sha256(child).hexdigest()!=CHILD:raise ValueError('Chained signed image differs from original stock reference')
++ return {'top_level_flags':2,'top_level_algorithm':'NONE','chained_flags':0,'exact_chained_stock_signature_preserved':True,'runtime_boot_certified':False}
++if __name__=='__main__':
++ directory=Path(sys.argv[1]);print(json.dumps(validate((directory/'vbmeta.img').read_bytes(),(directory/'vbmeta_system.img').read_bytes())))
+diff --git a/scripts/internal/check_p3s_boot_metadata.py b/scripts/internal/check_p3s_boot_metadata.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..4d332ffc1ea1bf933fe6246e2297515c7b3bd5ec
+--- /dev/null
++++ b/scripts/internal/check_p3s_boot_metadata.py
+@@ -0,0 +1,18 @@
++"""Reject boot/system OS and security-month mismatches before packaging."""
++from pathlib import Path
++import json,struct,sys
++boot,props=map(Path,sys.argv[1:])
++data=boot.read_bytes()
++if data[:8]!=b"ANDROID!" or len(data)<44: raise SystemExit("Invalid Android boot header")
++header=struct.unpack_from("<I",data,40)[0]
++if header!=3: raise SystemExit("Unreviewed p3s boot header version")
++packed=struct.unpack_from("<I",data,16)[0]
++version=((packed>>25)&127,(packed>>18)&127,(packed>>11)&127)
++month=f"{2000+((packed>>4)&127):04d}-{packed&15:02d}"
++properties=dict(line.split("=",1) for line in props.read_text().splitlines() if "=" in line and not line.startswith("#"))
++expected=tuple(map(int,properties["ro.build.version.release"].split(".")))
++expected=expected+(0,)*(3-len(expected))
++security=properties["ro.build.version.security_patch"][:7]
++if version!=expected or month!=security:
++    raise SystemExit(f"Boot/system metadata mismatch: header {version}/{month}, system {expected}/{security}")
++print(json.dumps({"boot_os_version":version,"security_month":month,"matches_system":True}))
+diff --git a/scripts/internal/check_p3s_image_metadata.py b/scripts/internal/check_p3s_image_metadata.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..12664ce5d110d56c0ac94e7f6adde5b8a608286e
+--- /dev/null
++++ b/scripts/internal/check_p3s_image_metadata.py
+@@ -0,0 +1,26 @@
++"""Reject malformed image labels and source-patch payload leakage."""
++from pathlib import Path
++import re
++import sys
++
++work,output=map(Path,sys.argv[1:])
++errors=[]
++for part in ("system","system/system","system_ext","vendor","product","odm"):
++    for path in (work/part).glob("[0-9][0-9][0-9][0-9]-*.patch"):
++        errors.append("Source patch is not a partition payload: "+str(path.relative_to(work)))
++labels=set()
++files=list((work/"configs").glob("file_context-*"))
++if not files: raise SystemExit("No image file-context metadata was generated")
++for path in files:
++    for number,line in enumerate(path.read_text().splitlines(),1):
++        if not line.strip() or line.lstrip().startswith("#"): continue
++        fields=line.split()
++        valid=len(fields)==2 or (len(fields)==3 and fields[1] in ("--","-b","-c","-d","-p","-l","-s"))
++        if not valid or not re.fullmatch(r"[^:\s]+:object_r:[^:\s]+:s\d+(?::[^\s]+)?(?:-s\d+(?::[^\s]+)?)?",fields[-1]):
++            errors.append(str(path.relative_to(work))+":"+str(number)+": missing/invalid SELinux context")
++        else: labels.add(fields[-1])
++if errors:
++    print("\n".join(errors[:30])); raise SystemExit(1)
++output.parent.mkdir(parents=True,exist_ok=True)
++output.write_text("\n".join(sorted(labels))+"\n")
++print("Image metadata syntax valid; "+str(len(labels))+" unique contexts require final-policy validation")
+diff --git a/scripts/internal/check_p3s_policy.py b/scripts/internal/check_p3s_policy.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3188d80a1be9c8eeeb6fc05e18f9a8f2294be2aa
+--- /dev/null
++++ b/scripts/internal/check_p3s_policy.py
+@@ -0,0 +1,56 @@
++"""Strict final p3s split-policy compile; does not modify ROM policy inputs."""
++from pathlib import Path
++import hashlib
++import json
++import re
++import subprocess
++import sys
++
++work,compiler,output=map(Path,sys.argv[1:])
++expected="bc22a6c804aae8bce25ad5eee069a6d2b90dc6bbfe50a2128e9433d9e6b9b510"
++if hashlib.sha256(compiler.read_bytes()).hexdigest()!=expected:
++    raise SystemExit("Unreviewed p3s policy compiler")
++parts={"system":work/"system/system/etc/selinux",
++       "system_ext":work/"system/system/system_ext/etc/selinux",
++       "product":work/"product/etc/selinux", "vendor":work/"vendor/etc/selinux",
++       "odm":work/"odm/etc/selinux"}
++version=(parts["vendor"]/"plat_sepolicy_vers.txt").read_text().strip()
++if version!="30.0": raise SystemExit("Personal p3s build requires original API30 vendor policy")
++files=[]
++for part,name in (("system","plat_sepolicy.cil"),("system_ext","system_ext_sepolicy.cil"),("product","product_sepolicy.cil")):
++    policy=parts[part]/name
++    if policy.exists(): files.append(policy)
++    elif part!="product": raise SystemExit("Missing required split policy: "+str(policy))
++    mapping=parts[part]/"mapping"/(version+".cil")
++    if mapping.exists(): files.append(mapping)
++    elif part!="product": raise SystemExit("Missing original API30 mapping: "+str(mapping))
++    compat=parts[part]/"mapping"/(version+".compat.cil")
++    if part!="product" and compat.exists(): files.append(compat)
++files += [parts["vendor"]/"plat_pub_versioned.cil",parts["vendor"]/"vendor_sepolicy.cil"]
++odm=parts["odm"]/"odm_sepolicy.cil"
++if odm.exists(): files.append(odm)
++genfs_file=parts["vendor"]/"genfs_labels_version.txt"
++genfs_version=202404
++if genfs_file.exists():
++    try: genfs_version=int(genfs_file.read_text().strip())
++    except ValueError: pass  # AOSP libgenfslabelsversion default for invalid/missing content.
++genfs=parts["system"]/("plat_sepolicy_genfs_"+str(genfs_version)+".cil")
++if genfs.exists(): files.append(genfs)
++elif genfs_version>=202504: raise SystemExit("Required genfs policy is missing")
++for path in files:
++    if re.search(r"\(\s*typepermissive\s",path.read_text()):
++        raise SystemExit("Unexpected static permissive domain: "+str(path))
++output.mkdir(parents=True,exist_ok=True)
++command=[str(compiler),"-m","-M","true","-G","-c","31","-o",str(output/"policy"),"-f",str(output/"file_contexts")]+list(map(str,files))
++result=subprocess.run(command,capture_output=True,text=True)
++(output/"compile.log").write_text(result.stdout+result.stderr)
++report={"strict_policy_compile_passed":result.returncode==0,"exit_code":result.returncode,
++        "neverallow_checks_disabled":False,"static_permissive_domains_found":False,
++        "compiler_sha256":expected,"genfs_labels_version":genfs_version,
++        "genfs_selection_basis":"vendor file or AOSP default; Samsung runtime behavior remains untested",
++        "inputs":{str(p.relative_to(work)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
++        "kernel_policy_load_verified":False,"runtime_validated":False}
++(output/"proof.json").write_text(json.dumps(report,indent=2))
++if result.returncode:
++    print((result.stdout+result.stderr)[-5000:]); raise SystemExit(result.returncode)
++print("Final p3s policy compiled with neverallow checks enabled; kernel load untested")
+diff --git a/scripts/internal/check_p3s_policy_access.py b/scripts/internal/check_p3s_policy_access.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..87bc2036f2864f239636f8215b2d58bfd6cfdc11
+--- /dev/null
++++ b/scripts/internal/check_p3s_policy_access.py
+@@ -0,0 +1,44 @@
++"""Check final file-label types and the private zygote boundary read contract."""
++from pathlib import Path
++import hashlib
++import json
++import shutil
++import subprocess
++import sys
++
++root=Path(__file__).resolve().parents[2]
++work,output=map(Path,sys.argv[1:])
++proof=json.loads((output/"proof.json").read_text())
++if not proof["strict_policy_compile_passed"]: raise SystemExit("Final policy compilation has not passed")
++for rel,expected in proof["inputs"].items():
++    if hashlib.sha256((work/rel).read_bytes()).hexdigest()!=expected:
++        raise SystemExit("Compiled policy input changed: "+rel)
++compiler=shutil.which("clang")
++if not compiler: raise SystemExit("A host Clang compiler is required for policy access validation")
++library=root/"external/android-tools/vendor/selinux/libsepol"
++source=root/"platform/exynos2100/patches/zygote/source/check-cap-policy.c"
++executable=output/"cap-policy-query"
++subprocess.run([compiler,"-O2","-I",str(library/"include"),str(source),
++    str(library/"src/libsepol.a"),"-lpthread","-o",str(executable)],check=True,capture_output=True,text=True)
++result=subprocess.run([str(executable),str(output/"policy"),str(output/"file-context-labels.txt")],capture_output=True,text=True)
++(output/"access-query.log").write_text(result.stdout+result.stderr)
++if result.returncode:
++    print((result.stdout+result.stderr)[-6000:]); raise SystemExit(result.returncode)
++report=json.loads(result.stdout.splitlines()[-1])
++allowed={row["domain"] for row in report["domains"] if row["open_read_getattr_allowed"]}
++if allowed!={"zygote_next","native_app_zygote"}:
++    raise SystemExit("Unexpected private capability-boundary read scope")
++if report["target_context"]!="u:object_r:p3s_proc_cap_last_cap:s0":
++    raise SystemExit("Missing dedicated capability-boundary genfs label")
++if any(row["write_append_execute_allowed"] for row in report["domains"]):
++    raise SystemExit("Unexpected non-read capability-boundary grant")
++if any(not row["ancestor_search_allowed"] for row in report["domains"] if row["domain"] in allowed):
++    raise SystemExit("Zygote cannot traverse the capability-boundary parent directories")
++if report["file_context_labels_checked"]<1 or report["invalid_file_context_labels"]:
++    raise SystemExit("Image contexts were not validated against final policy")
++report["policy_sha256"]=hashlib.sha256((output/"policy").read_bytes()).hexdigest()
++report["query_source_sha256"]=hashlib.sha256(source.read_bytes()).hexdigest()
++report["query_binary_sha256"]=hashlib.sha256(executable.read_bytes()).hexdigest()
++report["libsepol_archive_sha256"]=hashlib.sha256((library/"src/libsepol.a").read_bytes()).hexdigest()
++(output/"access-proof.json").write_text(json.dumps(report,indent=2))
++print("All image context types and narrowly scoped zygote reads validated; kernel runtime remains untested")
+diff --git a/scripts/internal/check_p3s_target_boot.py b/scripts/internal/check_p3s_target_boot.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..97e22576d2d1f320b5c242fffbcce9b0d637ff19
+--- /dev/null
++++ b/scripts/internal/check_p3s_target_boot.py
+@@ -0,0 +1,13 @@
++"""Reject p3s target ZIPs carrying generic or truncated boot containers."""
++from pathlib import Path
++import importlib.util,json,sys,tempfile,zipfile
++here=Path(__file__).parent
++helper=here/'normalize_p3s_boot_layout.py'
++if not helper.exists():helper=here/'normalize-p3s-boot-layout.py'
++spec=importlib.util.spec_from_file_location('layout',helper);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
++archive,reference=map(Path,sys.argv[1:])
++with zipfile.ZipFile(archive) as z,tempfile.TemporaryDirectory() as temp:
++ for name in ['boot.img','vendor_boot.img','dtbo.img']:
++  if z.namelist().count(name)!=1 or z.getinfo(name).file_size>(8388608 if name=='dtbo.img' else 67108864):raise SystemExit('Missing/duplicate/oversize '+name)
++ image=Path(temp)/'vendor_boot.img';image.write_bytes(z.read('vendor_boot.img'));geometry=m.check_layout(image,reference)
++ print(json.dumps({'archive':str(archive),'samsung_vendor_boot_geometry_passed':True,'geometry':geometry}))
+diff --git a/scripts/internal/check_p3s_vintf.py b/scripts/internal/check_p3s_vintf.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c082d84f89ee5789f35c1f4c79fee53d4d24554
+--- /dev/null
++++ b/scripts/internal/check_p3s_vintf.py
+@@ -0,0 +1,27 @@
++"""Run genuine public-build checkvintf with the complete candidate APEX inventory."""
++from pathlib import Path
++import hashlib,json,os,subprocess,sys,tempfile
++root=Path(__file__).resolve().parents[2]
++work,output=map(Path,sys.argv[1:])
++tools=Path(os.environ.get("P3S_VINTF_TOOLS_DIR",str(root/"out/tools/vintf-16644040")))
++tool=tools/"bin/checkvintf"
++expected="6f7601b9409ac5db70d8b05bc98d117fe68456464e710eb2e2964c7edf1325db"
++if not tool.is_file() or hashlib.sha256(tool.read_bytes()).hexdigest()!=expected:
++    raise SystemExit("Verified Google build 16644040 checkvintf required; set P3S_VINTF_TOOLS_DIR")
++output.mkdir(parents=True,exist_ok=True)
++with tempfile.TemporaryDirectory(prefix="apex-check-",dir=output) as temporary:
++    apex=Path(temporary)/"apex"
++    subprocess.run(["python3",str(root/"scripts/internal/prepare_p3s_apex_vintf.py"),str(work),str(apex)],check=True,stdout=subprocess.DEVNULL)
++    maps={"/system":work/"system/system","/system_ext":work/"system/system/system_ext","/vendor":work/"vendor","/product":work/"product","/odm":work/"odm","/apex":apex}
++    command=[str(tool),"--check-compat"]
++    for target,source in maps.items(): command += ["--dirmap",target+":"+str(source)]
++    command += ["--property","ro.product.first_api_level=30","--property","ro.boot.product.hardware.sku=","--property","ro.boot.product.vendor.sku=","--property","apex.all.ready=true","--kernel","5.4.304:"+str(work/"kernel/kernel.config")]
++    result=subprocess.run(command,capture_output=True,text=True)
++    (output/"checkvintf.log").write_text(result.stdout+result.stderr)
++    inventory=(apex/"inventory.json").read_bytes()
++    (output/"apex-inventory.json").write_bytes(inventory)
++    inputs={str(p.relative_to(work)):hashlib.sha256(p.read_bytes()).hexdigest() for part in maps if part!="/apex" for p in (maps[part]/"etc/vintf").rglob("*") if p.is_file()}
++    proof={"passed":result.returncode==0,"exit_code":result.returncode,"tool_sha256":expected,"public_build_id":"16644040","kernel_version":"5.4.304","kernel_config_sha256":hashlib.sha256((work/"kernel/kernel.config").read_bytes()).hexdigest(),"vintf_inputs":inputs,"apex_inventory_sha256":hashlib.sha256(inventory).hexdigest(),"runtime_validated":False}
++    (output/"proof.json").write_text(json.dumps(proof,indent=2))
++    if result.returncode: print((result.stdout+result.stderr)[-6500:]); raise SystemExit(result.returncode)
++print("Full candidate VINTF compatibility passed with actual kernel configuration and complete preinstalled APEX inventory")
+diff --git a/scripts/internal/create_target_files_zip.sh b/scripts/internal/create_target_files_zip.sh
+index f7a985a3604e5ac9978125684070b437531762ea..c1ddfb585d94056771106ec2f98a124fc2162887 100755
+--- a/scripts/internal/create_target_files_zip.sh
++++ b/scripts/internal/create_target_files_zip.sh
+@@ -5,6 +5,11 @@
+ # [
+ source "$SRC_DIR/scripts/utils/install_utils.sh" || exit 1
+ 
++if [ -n "${ROM_BUILD_TMP_ROOT:-}" ]; then
++    [[ "$ROM_BUILD_TMP_ROOT" = /mnt/d/Codex-ROM/p3s/build-beta2-r3 ]] || { echo "Unreviewed build temporary root" >&2; exit 1; }
++    TMP_DIR="$ROM_BUILD_TMP_ROOT/target-files"
++fi
++
+ trap 'rm -rf "$TMP_DIR"' EXIT INT
+ 
+ # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/build_super_image.py#72
+diff --git a/scripts/internal/gen_config_file.sh b/scripts/internal/gen_config_file.sh
+index f02cac1b6f5e5e0600362b67815ace8d5d593524..3268352c901d46cf6588150f144a14dc640b33df 100755
+--- a/scripts/internal/gen_config_file.sh
++++ b/scripts/internal/gen_config_file.sh
+@@ -501,6 +501,7 @@ fi
+     GET_BUILD_VAR "TARGET_DISABLE_AVB_SIGNING" "false"
+     GET_BUILD_VAR "TARGET_INCLUDE_PATCHED_VBMETA" "false"
+     GET_BUILD_VAR "TARGET_KEEP_ORIGINAL_SIGN" "false"
++    GET_BUILD_VAR "TARGET_PRESERVE_DATA_ENCRYPTION" "false"
+     GET_BUILD_VAR "TARGET_BOOT_PARTITION_SIZE" "none"
+     GET_BUILD_VAR "TARGET_DTBO_PARTITION_SIZE" "none"
+     GET_BUILD_VAR "TARGET_INIT_BOOT_PARTITION_SIZE" "none"
+diff --git a/scripts/internal/normalize_p3s_boot_layout.py b/scripts/internal/normalize_p3s_boot_layout.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb8bd3bea7ed42917143340ddf9272d09e24a244
+--- /dev/null
++++ b/scripts/internal/normalize_p3s_boot_layout.py
+@@ -0,0 +1,57 @@
++"""Repack p3s vendor_boot with verified Samsung geometry, preserving payloads.
++
++This corrects a demonstrated container mismatch; it does not establish a
++runtime root cause. No kernel code, modules, DTB or encryption policy changes.
++"""
++from pathlib import Path
++import argparse,hashlib,json,shlex,struct,subprocess,tempfile
++
++def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
++def vendor_header(p):
++ b=p.read_bytes()
++ if b[:8]!=b'VNDRBOOT' or len(b)<2112:raise ValueError('Invalid vendor boot')
++ page=struct.unpack_from('<I',b,12)[0];header=struct.unpack_from('<I',b,2096)[0];ramdisk=struct.unpack_from('<I',b,24)[0];dtb=struct.unpack_from('<I',b,2100)[0]
++ if page not in (2048,4096) or header!=2112 or not ramdisk or not dtb:raise ValueError('Unsupported vendor boot sizes')
++ align=lambda n:(n+page-1)//page*page
++ if align(header)+align(ramdisk)+dtb>len(b):raise ValueError('Truncated vendor boot payload')
++ return dict(version=struct.unpack_from('<I',b,8)[0],pagesize=struct.unpack_from('<I',b,12)[0],kernel_addr=struct.unpack_from('<I',b,16)[0],ramdisk_addr=struct.unpack_from('<I',b,20)[0],tags_addr=struct.unpack_from('<I',b,2076)[0],board=b[2080:2096].split(b'\0')[0].decode(),dtb_addr=struct.unpack_from('<Q',b,2104)[0])
++def check_layout(image,reference):
++ actual=vendor_header(image);expected=vendor_header(reference)
++ if actual!=expected:raise ValueError('Samsung vendor_boot layout mismatch: '+json.dumps({'actual':actual,'expected':expected}))
++ return actual
++
++def normalize(work,reference,tools):
++ boot=work/'boot.img';vendor=work/'vendor_boot.img'
++ expected=vendor_header(reference)
++ if expected['version']!=3 or expected['pagesize']!=4096 or expected['kernel_addr']!=0x80008000 or expected['ramdisk_addr']!=0x84000000 or expected['tags_addr']!=0x80000000 or expected['dtb_addr']!=0x81f00000:raise ValueError('Unexpected p3s reference layout')
++ before={n:sha(work/n) for n in ['boot.img','vendor_boot.img']}
++ with tempfile.TemporaryDirectory(prefix='p3s-layout-',dir=work) as temporary:
++  tmp=Path(temporary)
++  args={}
++  for name,image in [('boot',boot),('vendor',vendor)]:
++   destination=tmp/name;destination.mkdir()
++   result=subprocess.run([str(tools/'unpack_bootimg'),'--boot_img',str(image),'--out',str(destination),'--format=mkbootimg'],check=True,capture_output=True,text=True)
++   args[name]=shlex.split(result.stdout)
++  def replace(values,key,value):
++   i=values.index(key);values[i+1]=str(value)
++  v=args['vendor']
++  for key,value in [('pagesize',expected['pagesize']),('base',0),('kernel_offset',expected['kernel_addr']),('ramdisk_offset',expected['ramdisk_addr']),('tags_offset',expected['tags_addr']),('dtb_offset',expected['dtb_addr']),('board',expected['board'])]:replace(v,'--'+key,value)
++  b=args['boot'];line=b[b.index('--cmdline')+1]
++  words=[w for w in line.split() if not w.startswith(('panic=','loglevel=','printk.time='))]
++  words+=['panic=0','loglevel=7','printk.time=1'];replace(b,'--cmdline',' '.join(words))
++  for name,values,flag in [('boot',b,'--output'),('vendor',v,'--vendor_boot')]:
++   new=tmp/(name+'.img')
++   subprocess.run([str(tools/'mkbootimg'),*values,flag,str(new)],check=True)
++   verify=tmp/(name+'-verified');verify.mkdir()
++   subprocess.run([str(tools/'unpack_bootimg'),'--boot_img',str(new),'--out',str(verify)],check=True,capture_output=True)
++   for payload in (['kernel','ramdisk'] if name=='boot' else ['dtb','vendor_ramdisk']):
++    if (tmp/name/payload).read_bytes()!=(verify/payload).read_bytes():raise ValueError('Payload changed: '+name+'/'+payload)
++  check_layout(tmp/'vendor.img',reference)
++  boot.write_bytes((tmp/'boot.img').read_bytes());vendor.write_bytes((tmp/'vendor.img').read_bytes())
++ report={'purpose':'Preserve Samsung p3s vendor_boot container layout','stock_reference_sha256':sha(reference),'original_sha256':before,'corrected_unsigned_sha256':{n:sha(work/n) for n in before},'geometry':expected,'all_kernel_ramdisk_dtb_payloads_unchanged':True,'kernel_diagnostics':['panic=0','loglevel=7','printk.time=1'],'runtime_boot_verified':False}
++ (work/'p3s-boot-layout-proof.json').write_text(json.dumps(report,indent=2));return report
++
++if __name__=='__main__':
++ p=argparse.ArgumentParser();p.add_argument('--work',type=Path);p.add_argument('--reference',type=Path,required=True);p.add_argument('--tools',type=Path);p.add_argument('--check-image',type=Path);a=p.parse_args()
++ if a.check_image:print(json.dumps(check_layout(a.check_image,a.reference),indent=2))
++ else:print(json.dumps(normalize(a.work,a.reference,a.tools),indent=2))
+diff --git a/scripts/internal/prepare_p3s_apex_vintf.py b/scripts/internal/prepare_p3s_apex_vintf.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..38239bc0985c50d91e857e9576c422fa957d10dd
+--- /dev/null
++++ b/scripts/internal/prepare_p3s_apex_vintf.py
+@@ -0,0 +1,59 @@
++from pathlib import Path
++import hashlib,json,shutil,struct,subprocess,tempfile,zipfile,sys
++import xml.etree.ElementTree as ET
++base=Path(__file__).resolve().parents[2].parent
++work,out=map(Path,sys.argv[1:])
++if out.exists(): raise SystemExit('Existing APEX inventory retained')
++out.mkdir()
++tree=ET.Element('apex-info-list'); rows=[]; names=set()
++def varint(data,pos):
++    value=0; shift=0
++    while True:
++        b=data[pos]; pos+=1; value|=(b&127)<<shift
++        if b<128: return value,pos
++        shift+=7
++def manifest(data):
++    pos=0; result={}
++    while pos<len(data):
++        tag,pos=varint(data,pos); field,wire=tag>>3,tag&7
++        if wire==0: value,pos=varint(data,pos)
++        elif wire==2:
++            n,pos=varint(data,pos); value=data[pos:pos+n]; pos+=n
++        elif wire==1: pos+=8; continue
++        elif wire==5: pos+=4; continue
++        else: raise ValueError('Unknown manifest wire type')
++        if field in (1,2,5): result[field]=value
++    return result
++for part,directory in [('SYSTEM',work/'system/system'),('SYSTEM_EXT',work/'system/system/system_ext'),('PRODUCT',work/'product'),('VENDOR',work/'vendor'),('ODM',work/'odm')]:
++    for package in sorted((directory/'apex').glob('*')):
++        if package.suffix not in ('.apex','.capex'): continue
++        with tempfile.TemporaryDirectory(prefix='apex-',dir=out) as temporary:
++            tmp=Path(temporary)
++            with zipfile.ZipFile(package) as outer:
++                if 'original_apex' in outer.namelist():
++                    with outer.open('original_apex') as src,(tmp/'original.apex').open('wb') as dst: shutil.copyfileobj(src,dst,4*1024*1024)
++                    archive=zipfile.ZipFile(tmp/'original.apex')
++                else: archive=outer
++                fields=manifest(archive.read('apex_manifest.pb'))
++                name=fields[1].decode(); version=fields[2]
++                if '/' in name or name in names: raise SystemExit('Unsafe or duplicate APEX module: '+name)
++                names.add(name)
++                with archive.open('apex_payload.img') as src,(tmp/'payload.img').open('wb') as dst: shutil.copyfileobj(src,dst,4*1024*1024)
++                if archive is not outer: archive.close()
++            dest=out/name/'etc/vintf'; dest.mkdir(parents=True)
++            with (tmp/'payload.img').open('rb') as f: f.seek(1024); magic=f.read(64)
++            if magic[:4]==bytes.fromhex('e2e1f5e0'):
++                subprocess.run([str(base/'source/out/tools/bin/fsck.erofs'),'--extract='+str(tmp/'fs'),str(tmp/'payload.img')],check=True,capture_output=True)
++                if (tmp/'fs/etc/vintf').exists(): shutil.copytree(tmp/'fs/etc/vintf',dest,dirs_exist_ok=True)
++            elif magic[56:58]==bytes.fromhex('53ef'):
++                result=subprocess.run(['debugfs','-R','rdump /etc/vintf '+str(dest),str(tmp/'payload.img')],capture_output=True,text=True)
++                if result.returncode: raise SystemExit(result.stderr)
++                if result.stderr.strip() and 'File not found by ext2_lookup' not in result.stderr and len(result.stderr.splitlines())>1:
++                    raise SystemExit(result.stderr)
++            else: raise SystemExit('Unrecognized APEX filesystem: '+str(package))
++            path='/'+part.lower()+'/apex/'+package.name
++            ET.SubElement(tree,'apex-info',moduleName=name,modulePath=path,preinstalledModulePath=path,versionCode=str(version),versionName='',isFactory='true',isActive='true',lastUpdateMillis='0',partition=part)
++            rows.append({'package':str(package.relative_to(work)),'sha256':hashlib.sha256(package.read_bytes()).hexdigest(),'module':name,'version':version,'partition':part,'vintf_files':[str(p.relative_to(out)) for p in dest.rglob('*') if p.is_file()]})
++            print(name+' '+str(len(rows[-1]['vintf_files']))+' VINTF files',flush=True)
++ET.ElementTree(tree).write(out/'apex-info-list.xml',encoding='utf-8',xml_declaration=True)
++(out/'inventory.json').write_text(json.dumps(rows,indent=2))
+diff --git a/scripts/make_rom.sh b/scripts/make_rom.sh
+index f39881bcb37beae3f33dfc16f61bd6d2a105d0b5..241d008690ded6f090fe472aac62f8841c55bd22 100755
+--- a/scripts/make_rom.sh
++++ b/scripts/make_rom.sh
+@@ -169,10 +169,31 @@ if $BUILD_ROM; then
+ 
+     BUILD_APKS
+ 
++    if [ "$TARGET_CODENAME" = p3s ] && [ "$SOURCE_PLATFORM_SDK_VERSION" -eq 37 ]; then
++        python3 "$SRC_DIR/scripts/internal/normalize_p3s_boot_layout.py" \
++            --work "$WORK_DIR/kernel" --reference "$FW_DIR/$TARGET_FIRMWARE_PATH/kernel/vendor_boot.img" \
++            --tools "$TOOLS_DIR/bin" || exit 1
++        python3 "$SRC_DIR/scripts/internal/check_p3s_boot_metadata.py" \
++            "$WORK_DIR/kernel/boot.img" "$WORK_DIR/system/system/build.prop" || exit 1
++        LOG_STEP_IN true "Strict final S21 Ultra policy validation"
++        python3 "$SRC_DIR/scripts/internal/check_p3s_image_metadata.py" "$WORK_DIR" \
++            "$OUT_DIR/target/p3s/policy-check/file-context-labels.txt" || exit 1
++        python3 "$SRC_DIR/scripts/internal/check_p3s_policy.py" "$WORK_DIR" \
++            "$TOOLS_DIR/bin/secilc" "$OUT_DIR/target/p3s/policy-check" || exit 1
++        python3 "$SRC_DIR/scripts/internal/check_p3s_policy_access.py" "$WORK_DIR" \
++            "$OUT_DIR/target/p3s/policy-check" || exit 1
++        python3 "$SRC_DIR/scripts/internal/check_p3s_vintf.py" "$WORK_DIR" "$OUT_DIR/target/p3s/vintf-check" || exit 1
++        LOG_STEP_OUT
++    fi
++
+     echo -n "$(GET_WORK_DIR_HASH)" > "$WORK_DIR/.completed"
+ fi
+ 
+ if $BUILD_TARGET_FILES || $BUILD_FLASHABLE_ZIP; then
++    ROM_PACKAGE_DIR="${ROM_PACKAGE_DIR:-$OUT_DIR}"
++    [[ "$ROM_PACKAGE_DIR" = /* ]] || { LOGE "ROM_PACKAGE_DIR must be absolute"; exit 1; }
++    mkdir -p "$ROM_PACKAGE_DIR" || exit 1
++
+     ZIP_FILE_NAME="${TARGET_CODENAME}_"
+     if [ "$(GET_PROP "system" "ro.unica.version")" ]; then
+         ZIP_FILE_NAME+="$(GET_PROP "system" "ro.unica.version")"
+@@ -181,17 +202,17 @@ if $BUILD_TARGET_FILES || $BUILD_FLASHABLE_ZIP; then
+     fi
+     ZIP_FILE_NAME+="-target_files.zip"
+ 
+-    if [ ! -f "$OUT_DIR/$ZIP_FILE_NAME" ]; then
++    if [ ! -f "$ROM_PACKAGE_DIR/$ZIP_FILE_NAME" ]; then
+         LOG_STEP_IN true "Creating target-files zip"
+-        "$SRC_DIR/scripts/internal/create_target_files_zip.sh" "$OUT_DIR/$ZIP_FILE_NAME" || exit 1
++        "$SRC_DIR/scripts/internal/create_target_files_zip.sh" "$ROM_PACKAGE_DIR/$ZIP_FILE_NAME" || exit 1
+         LOG_STEP_OUT
+     else
+-        LOGW "File already exists: ${OUT_DIR//$SRC_DIR\//}/$ZIP_FILE_NAME"
++        LOGW "File already exists: ${ROM_PACKAGE_DIR//$SRC_DIR\//}/$ZIP_FILE_NAME"
+     fi
+ 
+     if $BUILD_FLASHABLE_ZIP; then
+         LOG_STEP_IN true "Creating flashable zip"
+-        "$SRC_DIR/scripts/build_flashable_zip.sh" "$OUT_DIR/$ZIP_FILE_NAME" || exit 1
++        "$SRC_DIR/scripts/build_flashable_zip.sh" "$ROM_PACKAGE_DIR/$ZIP_FILE_NAME" || exit 1
+         LOG_STEP_OUT
+     fi
+ fi
+diff --git a/scripts/utils/build_utils.sh b/scripts/utils/build_utils.sh
+index 4b0c5060e5be20786b3390d9e7794048c77065f6..ae1c62f2df7ddb25ff72fb4ae7f188841d8f6a5f 100644
+--- a/scripts/utils/build_utils.sh
++++ b/scripts/utils/build_utils.sh
+@@ -55,7 +55,7 @@ DEPENDENCIES=(
+     "7z" "awk" "basename" "bc" "brotli" "cat" "clang" "cmake"
+     "cp" "cpio" "curl" "cut" "cwebp" "dd" "dirname" "du" "ffmpeg"
+     "file" "getfattr" "git" "grep" "head" "java" "ln"
+-    "lz4" "make" "md5sum" "mkdir" "mount" "mv" "perl" "protoc"
++    "lz4" "make" "md5sum" "mkdir" "mount" "mv" "patchelf" "perl" "protoc" "readelf"
+     "python3" "rm" "rsync" "sed" "sha1sum" "sort" "split" "stat"
+     "sudo" "tail" "tar" "touch" "tr" "truncate" "umount" "unzip"
+     "wc" "whoami" "xargs" "xxd" "zip" "zstd"
+diff --git a/target/p3s/config.sh b/target/p3s/config.sh
+index 97dcdd1ff463cb04ecf271510ad1da26d10d544e..d0e84296afd635cb349d576b9afdb812fd8e236e 100755
+--- a/target/p3s/config.sh
++++ b/target/p3s/config.sh
+@@ -46,3 +46,6 @@ TARGET_SECURITY_SUPPORT_ESEK=false
+ TARGET_WLAN_SUPPORT_80211AX_6GHZ=true
+ TARGET_WLAN_SUPPORT_MIMO=true
+ TARGET_WLAN_SUPPORT_MOBILEAP_WIFI_CONCURRENCY=true
++
++# Keep the original target vendor encryption contract during image adaptation.
++TARGET_PRESERVE_DATA_ENCRYPTION=true
+diff --git a/target/p3s/installer/assertions.edify b/target/p3s/installer/assertions.edify
+index a3acb80da38366582b493dea63721c2b98587718..dd7c79da54eedd97d84afd405547f50a88517d09 100644
+--- a/target/p3s/installer/assertions.edify
++++ b/target/p3s/installer/assertions.edify
+@@ -1,3 +1,8 @@
+-is_substring("afaneh92", getprop("ro.twrp.version")) && abort("E3000: This package does not support afaneh92's recovery.");
+-getprop("ro.boot.em.model") == "SM-G998B" && getprop("ro.boot.bootloader") != "G998BXXSJHZC2" && greater_than_int(getprop("ro.boot.rp"), "19") && abort("E3003: This package requires the \"G998BXXSJHZC2\" firmware installed on your device; you have \"" + getprop("ro.boot.bootloader") + "\".");
+-getprop("ro.boot.em.model") == "SM-G998N" && getprop("ro.boot.bootloader") != "G998NKSSCHZA9" && greater_than_int(getprop("ro.boot.rp"), "12") && abort("E3003: This package requires the \"G998NKSSCHZA9\" firmware installed on your device; you have \"" + getprop("ro.boot.bootloader") + "\".");
++getprop("ro.boot.em.model") == "SM-G998B" || abort("E3004: This beta supports SM-G998B only.");
++getprop("ro.boot.bootloader") == "G998BXXSJHZC2" || abort("E3003: Install the exact G998BXXSJHZC2 stock firmware before this beta. No automatic bootloader updates are provided.");
++getprop("ro.boot.rp") == "19" || abort("E3003: Unexpected bootloader revision; no partition changes made.");
++getprop("ro.boot.verifiedbootstate") == "orange" || abort("E3003: Bootloader must report unlocked/orange verified-boot state.");
++(getprop("ro.boot.vbmeta.device_state") == "" || getprop("ro.boot.vbmeta.device_state") == "unlocked") || abort("E3003: Conflicting locked bootloader state.");
++getprop("ro.twrp.version") != "" || abort("E3000: A separately validated custom recovery is required.");
++is_substring("afaneh92", getprop("ro.twrp.version")) && abort("E3000: This package retains its existing recovery compatibility restriction.");
++ui_print("S21 Ultra personal BETA2-r5: experimental boot-layout correction; boot success is not certified.");
+diff --git a/target/p3s/installer/avb/PROVENANCE.json b/target/p3s/installer/avb/PROVENANCE.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5f3f8c6832aa2503a73ceb4f1e41ab25ad9dd9b
+--- /dev/null
++++ b/target/p3s/installer/avb/PROVENANCE.json
+@@ -0,0 +1,30 @@
++{
++  "source": "/mnt/d/Codex-ROM/p3s/odin-packages/SM-G998B_AUT/AP_G998BXXSJHZC2_G998BXXSJHZC2_MQB107295400_REV01_user_low_ship_MULTI_CERT_meta_OS15.tar.md5",
++  "firmware": "G998BXXSJHZC2",
++  "images": {
++    "boot.img": {
++      "bytes": 67108864,
++      "sha256": "28818995d6c3060df19602a0104c2c7dac9861f31f2620f9dab8466e6cdf51a1"
++    },
++    "vendor_boot.img": {
++      "bytes": 67108864,
++      "sha256": "f5b18d6b18230702cef98d80f4543a0f452cddb5829310b3acdafd6d600a60b5"
++    },
++    "dtbo.img": {
++      "bytes": 8388608,
++      "sha256": "f7c96bf0fb7dc67c82c05c7ed02cc74aa40e5f1f8ae68f2b6b47cc38e556dd34"
++    },
++    "recovery.img": {
++      "bytes": 67108864,
++      "sha256": "9c31ee58fa14d576b90897ebf54a4a8f5afa115651842ec867a9a9c28136f220"
++    },
++    "vbmeta.img": {
++      "bytes": 10128,
++      "sha256": "cd86d91b22e4e273abb65189cadea1c6d76683822e4fefa0c5407110462917ea"
++    },
++    "vbmeta_system.img": {
++      "bytes": 3664,
++      "sha256": "70cb1eee43fb3bde639a943a64ecaab1faa0c5cae0545f5d5295efa22fdaef5e"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/target/p3s/installer/customize.sh b/target/p3s/installer/customize.sh
+index aea7d980e2862301367b977a3ba62ae12c80e9f4..cf65c135a49c817477dcddb9f868df8333ff34ed 100755
+--- a/target/p3s/installer/customize.sh
++++ b/target/p3s/installer/customize.sh
+@@ -1,72 +1,7 @@
+-REPOSITORY="https://github.com/UN1CA/proprietary_vendor_samsung_exynos2100/releases/download"
+-TARS=(
+-    # p3sxxx (eur_open)
+-    "G998BXXSJHZC2_XEO_OXM/BL_G998BXXSJHZC2_G998BXXSJHZC2_MQB107295400_REV01_user_low_ship_MULTI_CERT.tar.md5"
+-    "G998BXXSJHZC2_XEO_OXM/CP_G998BXXSJHZA6_CP32677266_MQB105755821_REV01_user_low_ship_MULTI_CERT.tar.md5"
+-    # p3sksx (kor_single)
+-    "G998NKSSCHZA9_KOO_OKR/BL_G998NKSSCHZA9_G998NKSSCHZA9_MQB107175299_REV01_user_low_ship_MULTI_CERT.tar.md5"
+-    "G998NKSSCHZA9_KOO_OKR/CP_G998NKOSCHZA5_CP32602500_MQB105441885_REV01_user_low_ship_MULTI_CERT.tar.md5"
+-)
+-
+-for i in "${TARS[@]}"; do
+-    LOG "- Downloading $(basename "$i")"
+-    DOWNLOAD_FILE "$REPOSITORY/$i" "$TMP_DIR/$(basename "$i")" || return 1
++# Personal p3s beta: exact stock firmware is a precondition, never an OTA action.
++for image in vbmeta.img vbmeta_system.img; do
++    input="$SRC_DIR/target/p3s/installer/avb/$image"
++    [ -f "$input" ] && [ "$(stat -c %s "$input")" = 65536 ] || return 1
++    cp -a "$input" "$TMP_DIR/$image" || return 1
+ done
+-
+-while IFS= read -r f; do
+-    FILE_NAME="$(basename "$f")"
+-    LOG "- Verifying $FILE_NAME"
+-
+-    FILE_NAME="${FILE_NAME%.md5}"
+-
+-    # Samsung stores the output of `md5sum` at the very end of the file
+-    LENGTH="32" # Length of MD5 hash
+-    LENGTH="$((LENGTH + 2))" # 2 whitespace chars
+-    LENGTH="$((LENGTH + ${#FILE_NAME}))" # File name without .md5 extension
+-    LENGTH="$((LENGTH + 1))" # 1 newline char
+-
+-    STORED_HASH="$(tail -c "$LENGTH" "$f" | cut -d " " -f 1 -s)"
+-    if [ ! "$STORED_HASH" ] || [[ "${#STORED_HASH}" != "32" ]]; then
+-        LOG "\033[0;31m! Expected hash could not be parsed\033[0m"
+-        return 1
+-    fi
+-
+-    CALCULATED_HASH="$(head -c-$LENGTH "$f" | md5sum | cut -d " " -f 1 -s)"
+-
+-    if [[ "$STORED_HASH" != "$CALCULATED_HASH" ]]; then
+-        LOG "\033[0;31m! File is damaged\033[0m"
+-        return 1
+-    fi
+-
+-    FILE_NAME="$(basename "$f")"
+-    LOG "- Extracting $FILE_NAME"
+-
+-    MODEL="$(cut -c4-8 <<< "$FILE_NAME" | sed "s/^/SM-/")"
+-
+-    if [ ! -d "$TMP_DIR/firmware/$MODEL" ]; then
+-        EVAL "mkdir -p \"$TMP_DIR/firmware/$MODEL\"" || return 1
+-    fi
+-
+-    EVAL "cd \"$TMP_DIR/firmware/$MODEL\"; tar -xf \"$f\"" || return 1
+-    EVAL "rm -f \"$f\"" || return 1
+-
+-    if [ -f "$TMP_DIR/firmware/$MODEL/modem_debug.bin.lz4" ]; then
+-        LOG "- Deleting firmware/$MODEL/modem_debug.bin.lz4"
+-        EVAL "rm -f \"$TMP_DIR/firmware/$MODEL/modem_debug.bin.lz4\"" || return 1
+-    fi
+-
+-    unset FILE_NAME LENGTH STORED_HASH CALCULATED_HASH MODEL
+-done < <(find "$TMP_DIR" -type f -name "*.md5")
+-
+-while IFS= read -r f; do
+-    LOG "- Decompressing ${f#"$TMP_DIR"/}"
+-    EVAL "lz4 -d --rm \"$f\" \"${f%.lz4}\"" || return 1
+-done < <(find "$TMP_DIR" -type f -name "*.lz4")
+-
+-while IFS= read -r f; do
+-    LOG "- Patching ${f#"$TMP_DIR"/}"
+-    # https://android.googlesource.com/platform/system/core/+/refs/tags/android-15.0.0_r1/fastboot/fastboot.cpp#1129
+-    EVAL "printf \"\x03\" | dd of=\"$f\" bs=1 seek=123 count=1 conv=notrunc" || return 1
+-done < <(find "$TMP_DIR" -type f -name "vbmeta.img")
+-
+-unset REPOSITORY TARS
++unset image input
+diff --git a/target/p3s/installer/install-end.edify b/target/p3s/installer/install-end.edify
+index e138982efa92cd903d7132665098ae27d1c68774..2ea4b02f4f9e4e759e78341c3c5215f38972a9db 100644
+--- a/target/p3s/installer/install-end.edify
++++ b/target/p3s/installer/install-end.edify
+@@ -1,60 +1,4 @@
+-if getprop("ro.boot.em.model") == "SM-G998B" && getprop("ro.boot.bootloader") != "G998BXXSJHZC2" then
+-  ui_print("Full Patching modem.bin img...");
+-  package_extract_file("firmware/SM-G998B/modem.bin", "/dev/block/by-name/radio");
+-  ui_print("Full Patching vbmeta.img img...");
+-  package_extract_file("firmware/SM-G998B/vbmeta.img", "/dev/block/by-name/vbmeta");
+-  assert(mark_header_bt("/dev/block/by-name/bota", 0, 0, "000"));
+-  ui_print("Write dpm.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/dpm.img", "/dev/block/by-name/bota", 8, 8192));
+-  ui_print("Write harx.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/harx.bin", "/dev/block/by-name/bota", 8236, 3145728));
+-  ui_print("Write keystorage.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/keystorage.bin", "/dev/block/by-name/bota", 3154000, 524288));
+-  ui_print("Write ldfw.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/ldfw.img", "/dev/block/by-name/bota", 3678324, 8388608));
+-  ui_print("Write sboot.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/sboot.bin", "/dev/block/by-name/bota", 12066968, 4194304));
+-  ui_print("Write ssp.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/ssp.img", "/dev/block/by-name/bota", 16261308, 496640));
+-  ui_print("Write tzar.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/tzar.img", "/dev/block/by-name/bota", 16757984, 7340816));
+-  ui_print("Write tzsw.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/tzsw.img", "/dev/block/by-name/bota", 24098836, 1572864));
+-  ui_print("Write uh.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/uh.bin", "/dev/block/by-name/bota", 25671736, 93832));
+-  ui_print("Write up_param.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/up_param.bin", "/dev/block/by-name/bota", 25765604, 4638720));
+-  ui_print("Write vddcal_fw.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998B/vddcal_fw.bin", "/dev/block/by-name/bota", 30404360, 2097152));
+-  assert(mark_header_bt("/dev/block/by-name/bota", 0, 11, 3142939818));
+-endif;
+-if getprop("ro.boot.em.model") == "SM-G998N" && getprop("ro.boot.bootloader") != "G998NKSSCHZA9" then
+-  ui_print("Full Patching modem.bin img...");
+-  package_extract_file("firmware/SM-G998N/modem.bin", "/dev/block/by-name/radio");
+-  ui_print("Full Patching vbmeta.img img...");
+-  package_extract_file("firmware/SM-G998N/vbmeta.img", "/dev/block/by-name/vbmeta");
+-  assert(mark_header_bt("/dev/block/by-name/bota", 0, 0, "000"));
+-  ui_print("Write dpm.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/dpm.img", "/dev/block/by-name/bota", 8, 8192));
+-  ui_print("Write harx.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/harx.bin", "/dev/block/by-name/bota", 8236, 3145728));
+-  ui_print("Write keystorage.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/keystorage.bin", "/dev/block/by-name/bota", 3154000, 524288));
+-  ui_print("Write ldfw.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/ldfw.img", "/dev/block/by-name/bota", 3678324, 8388608));
+-  ui_print("Write sboot.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/sboot.bin", "/dev/block/by-name/bota", 12066968, 4194304));
+-  ui_print("Write ssp.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/ssp.img", "/dev/block/by-name/bota", 16261308, 496640));
+-  ui_print("Write tzar.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/tzar.img", "/dev/block/by-name/bota", 16757984, 7340816));
+-  ui_print("Write tzsw.img to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/tzsw.img", "/dev/block/by-name/bota", 24098836, 1572864));
+-  ui_print("Write uh.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/uh.bin", "/dev/block/by-name/bota", 25671736, 93832));
+-  ui_print("Write up_param.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/up_param.bin", "/dev/block/by-name/bota", 25765604, 4618240));
+-  ui_print("Write vddcal_fw.bin to /dev/block/by-name/bota");
+-  assert(write_data_bt("firmware/SM-G998N/vddcal_fw.bin", "/dev/block/by-name/bota", 30383880, 2097152));
+-  assert(mark_header_bt("/dev/block/by-name/bota", 0, 11, 3142939818));
+-endif;
++ui_print("Installing the explicit beta verification metadata...");
++assert(package_extract_file("vbmeta.img", "/dev/block/by-name/vbmeta"));
++assert(package_extract_file("vbmeta_system.img", "/dev/block/by-name/vbmeta_system"));
++ui_print("Bootloader, modem, recovery and BOTA were not updated by this beta installer.");
+diff --git a/target/p3s/patches/vaultkeeper/customize.sh b/target/p3s/patches/vaultkeeper/customize.sh
+new file mode 100644
+index 0000000000000000000000000000000000000000..eee8cbaf3e75a684aa60b187c68600d70c9c4c12
+--- /dev/null
++++ b/target/p3s/patches/vaultkeeper/customize.sh
+@@ -0,0 +1,4 @@
++# Use the framework client matching the S21 vendor VaultKeeper HIDL service.
++for library in libvkmanager.so vendor.samsung.hardware.security.vaultkeeper@2.0.so; do
++    ADD_TO_WORK_DIR "$TARGET_FIRMWARE" system "system/lib64/$library" 0 0 644 u:object_r:system_lib_file:s0 || return 1
++done
+diff --git a/target/p3s/patches/vaultkeeper/module.prop b/target/p3s/patches/vaultkeeper/module.prop
+new file mode 100644
+index 0000000000000000000000000000000000000000..e87ea05dcb086db1dd22c9ce28052e83a805ea3b
+--- /dev/null
++++ b/target/p3s/patches/vaultkeeper/module.prop
+@@ -0,0 +1,4 @@
++id=vaultkeeper
++name=S21 VaultKeeper client
++author=p3s ROM development
++description=Use the SM-G998B stock framework client for the vendor VaultKeeper service.
+diff --git a/unica/patches/selinux/customize.sh b/unica/patches/selinux/customize.sh
+index f939f686eaeecac94be587488acff83bea1902f1..f14d33b9fe7c5da53a939432b824c2f2e2868f23 100644
+--- a/unica/patches/selinux/customize.sh
++++ b/unica/patches/selinux/customize.sh
+@@ -1,3 +1,6 @@
++SKIPUNZIP=1
++# system/ and vendor/ contain policy patches, not partition payloads.
++
+ # UN1CA SELinux entries removal list
+ # - Append new type entries to the ENTRIES list
+ # - Add the EXACT type entry, DO NOT just add a common pattern (eg. "fabriccrypto", "fabriccrypto_exec" and NOT just "fabriccrypto")
+diff --git a/unica/patches/vintf/check_kernel_config.py b/unica/patches/vintf/check_kernel_config.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5e09bba398f1de48f94ab25af2a464eb50bf08b
+--- /dev/null
++++ b/unica/patches/vintf/check_kernel_config.py
+@@ -0,0 +1,63 @@
++"""Check only kernel-config requirements in a reference framework matrix.
++
++This does not replace checkvintf or validate HAL/version/instance contracts.
++The build caller supplies the verified original target matrix and compiled config.
++"""
++from pathlib import Path
++import json
++import re
++import xml.etree.ElementTree as ET
++
++def read_config(text):
++    result={}
++    for line in text.splitlines():
++        if line.startswith('CONFIG_') and '=' in line:
++            name,value=line.split('=',1)
++            result[name]=json.loads(value) if value.startswith('"') else value
++        elif line.startswith('# CONFIG_') and line.endswith(' is not set'):
++            result[line[2:-11]]='n'
++    return result
++
++def evaluate(matrix,config,version):
++    actual=tuple(map(int,version.split('-')[0].split('.')))
++    matched=0; checked=0; failures=[]; versions=[]
++    def setting(node):
++        key=node.findtext('key'); value=node.find('value')
++        if value is None or value.get('type') not in ('tristate','string'):
++            raise ValueError('Unsupported matrix config value; do not silently pass it')
++        return key,value.text or '',config.get(key,'n')
++    for kernel in matrix.findall('kernel'):
++        required=tuple(map(int,kernel.get('version').split('.')))
++        if required[:2]!=actual[:2]:
++            continue
++        versions.append(required)
++        conditions=[setting(c) for c in kernel.findall('conditions/config')]
++        if not all(expected==observed for _,expected,observed in conditions):
++            continue
++        matched+=1
++        if actual<required:
++            failures.append({'minimum_version':'.'.join(map(str,required)),'actual_version':version})
++        for entry in kernel.findall('config'):
++            key,expected,observed=setting(entry); checked+=1
++            if expected!=observed:
++                failures.append({'key':key,'required':expected,'actual':observed})
++    if not versions or not matched:
++        raise ValueError('No applicable reference kernel requirements')
++    return {'applicable_kernel_blocks':matched,'config_requirements_checked':checked,
++            'failures':failures,'reference_kernel_config_requirements_passed':not failures,
++            'full_vintf_compatibility_verified':False}
++
++if __name__ == '__main__':
++    import hashlib
++    import sys
++    if len(sys.argv) != 4:
++        raise SystemExit('Usage: check_kernel_config.py MATRIX ACTUAL_CONFIG KERNEL_RECEIPT')
++    matrix, config, receipt = map(Path, sys.argv[1:])
++    record = json.loads(receipt.read_text())
++    expected = record.get('source_inputs', {}).get('expected_resolved_config_sha256')
++    if not expected or hashlib.sha256(config.read_bytes()).hexdigest() != expected:
++        raise SystemExit('Compiled kernel config provenance mismatch; do not use embedded stock IKCONFIG')
++    report = evaluate(ET.parse(matrix).getroot(), read_config(config.read_text()), record['compiled_release'])
++    print(json.dumps(report, indent=2))
++    if not report['reference_kernel_config_requirements_passed']:
++        raise SystemExit('Actual compiled kernel does not satisfy the target matrix; preserve the requirements and fix the kernel profile')
+diff --git a/unica/patches/vintf/customize.sh b/unica/patches/vintf/customize.sh
+index 2ddcda71cad52152ee8ed712f17bead7e379c4d4..ae30fd510e285777562cc335d5d756ca32532832 100755
+--- a/unica/patches/vintf/customize.sh
++++ b/unica/patches/vintf/customize.sh
+@@ -1,3 +1,40 @@
++# Android17 donors no longer carry the p3s API30 framework matrix.
++# Keep the exact target contract, including its HAL and kernel requirements.
++if [ "$SOURCE_PLATFORM_SDK_VERSION" -eq 37 ] && [ "$TARGET_CODENAME" = p3s ]; then
++    VINTF_TARGET_PATH="${TARGET_FIRMWARE%%/*}_${TARGET_FIRMWARE#*/}"
++    VINTF_TARGET_PATH="${VINTF_TARGET_PATH%%/*}"
++    VINTF_LEGACY_LEVEL="$(python3 - "$WORK_DIR/vendor/etc/vintf/manifest.xml" <<'PY'
++import sys
++import xml.etree.ElementTree as ET
++root = ET.parse(sys.argv[1]).getroot()
++level = root.get('target-level', '')
++if root.tag != 'manifest' or root.get('type') != 'device' or level != '5':
++    raise SystemExit('Unreviewed p3s vendor VINTF level')
++print(level)
++PY
++)" || ABORT "Cannot determine the reviewed p3s vendor VINTF level"
++    VINTF_LEGACY_NAME="compatibility_matrix.$VINTF_LEGACY_LEVEL.xml"
++    VINTF_LEGACY_SOURCE="$FW_DIR/$VINTF_TARGET_PATH/system/system/etc/vintf/$VINTF_LEGACY_NAME"
++    python3 - "$VINTF_LEGACY_SOURCE" "$VINTF_LEGACY_LEVEL" <<'PY' || ABORT "Missing or mismatched original target framework matrix"
++import sys
++import xml.etree.ElementTree as ET
++root = ET.parse(sys.argv[1]).getroot()
++if root.tag != 'compatibility-matrix' or root.get('type') != 'framework' or root.get('level') != sys.argv[2]:
++    raise SystemExit('Original framework-matrix identity mismatch')
++PY
++    python3 "$MODPATH/check_kernel_config.py" "$VINTF_LEGACY_SOURCE" \
++        "$WORK_DIR/kernel/kernel.config" "$WORK_DIR/kernel/floppy-preserved.json" || \
++        ABORT "Actual compiled p3s kernel fails original framework requirements"
++    VINTF_LEGACY_DEST="$WORK_DIR/system/system/etc/vintf/$VINTF_LEGACY_NAME"
++    if [ -e "$VINTF_LEGACY_DEST" ]; then
++        cmp -s "$VINTF_LEGACY_SOURCE" "$VINTF_LEGACY_DEST" ||             ABORT "Unexpected existing p3s legacy matrix; review before replacement"
++    else
++        LOG "- Restoring the original p3s framework matrix at FCM level $VINTF_LEGACY_LEVEL"
++        ADD_TO_WORK_DIR "$TARGET_FIRMWARE" system "system/etc/vintf/$VINTF_LEGACY_NAME" ||             ABORT "Could not restore the original p3s framework matrix"
++    fi
++    unset VINTF_TARGET_PATH VINTF_LEGACY_LEVEL VINTF_LEGACY_NAME VINTF_LEGACY_SOURCE VINTF_LEGACY_DEST
++fi
++
+ _LOG() { if $DEBUG; then LOGW "$1"; else ABORT "$1"; fi }
+ 
+ if [ -f "$SRC_DIR/target/$TARGET_CODENAME/vintf/compatibility_matrix.device.xml" ]; then
+@@ -30,3 +67,8 @@ elif [[ "$SOURCE_PLATFORM_SDK_VERSION" == "$TARGET_PLATFORM_SDK_VERSION" ]]; the
+ fi
+ 
+ unset -f _LOG
++
++# Original SM-G998B proprietary HAL declarations supplement, never replace, donor requirements.
++if [ "$TARGET_CODENAME" = p3s ] && [ "$SOURCE_PLATFORM_SDK_VERSION" -eq 37 ]; then
++    ADD_TO_WORK_DIR "$MODPATH/payload" system "system/etc/vintf/compatibility_matrix.p3s-vendor.xml" 0 0 644 "u:object_r:system_file:s0" || return 1
++fi
+diff --git a/unica/patches/vintf/payload/system/etc/vintf/compatibility_matrix.p3s-vendor.xml b/unica/patches/vintf/payload/system/etc/vintf/compatibility_matrix.p3s-vendor.xml
+new file mode 100644
+index 0000000000000000000000000000000000000000..bdaa8eb86a657448d92e40192bda1743b4277f0f
+--- /dev/null
++++ b/unica/patches/vintf/payload/system/etc/vintf/compatibility_matrix.p3s-vendor.xml
+@@ -0,0 +1,155 @@
++<?xml version='1.0' encoding='utf-8'?>
++<compatibility-matrix version="8.0" type="framework">
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.health</name>
++    <version>2.0</version>
++    <interface>
++      <name>ISehHealth</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.camera.provider</name>
++    <version>4.0</version>
++    <interface>
++      <name>ISehCameraProvider</name>
++      <instance>legacy/0</instance>
++    </interface>
++  </hal>
++  <hal format="aidl" optional="true">
++    <name>vendor.samsung.hardware.hyper</name>
++    <interface>
++      <name>ISehHyPer</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="aidl" optional="true">
++    <name>vendor.samsung.hardware.media.mpp</name>
++    <interface>
++      <name>ISehMppStore</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.hqm</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehHqm</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="aidl" optional="true">
++    <name>vendor.samsung.hardware.tlc.kg</name>
++    <interface>
++      <name>ISehKg</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.tlc.snap</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehSnapSec</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.wifi.hostapd</name>
++    <version>3.0</version>
++    <interface>
++      <name>ISehHostapd</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.wifi</name>
++    <version>2.3</version>
++    <interface>
++      <name>ISehWifi</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.audio</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehDevicesFactory</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.bluetooth.a2dp</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehBluetoothAudioOffload</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.bluetooth.a2dpsink</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehBluetoothA2dpSinkProvidersFactory</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.bluetooth.audio</name>
++    <version>2.1</version>
++    <interface>
++      <name>ISehBluetoothAudioProvidersFactory</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.gnss</name>
++    <version>2.1</version>
++    <interface>
++      <name>ISehGnss</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.security.wsm</name>
++    <version>1.0</version>
++    <interface>
++      <name>ISehWsm</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="aidl" optional="true">
++    <name>vendor.samsung.hardware.snap</name>
++    <interface>
++      <name>ISehSnap</name>
++      <instance>default</instance>
++      <instance>secsnap</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.sysinput</name>
++    <version>1.3</version>
++    <interface>
++      <name>ISehSysInputCallback</name>
++    </interface>
++    <interface>
++      <name>ISehSysInputDev</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung.hardware.wifi.supplicant</name>
++    <version>3.1</version>
++    <interface>
++      <name>ISehSupplicant</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++  <hal format="hidl" optional="true">
++    <name>vendor.samsung_slsi.hardware.ExynosA2DPOffload</name>
++    <version>3.0</version>
++    <interface>
++      <name>IExynosA2DPOffload</name>
++      <instance>default</instance>
++    </interface>
++  </hal>
++</compatibility-matrix>
+\ No newline at end of file

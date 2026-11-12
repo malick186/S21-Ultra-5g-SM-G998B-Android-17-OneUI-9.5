@@ -1,0 +1,6 @@
+*.img
+*.pk8
+*.pem
+*.zip
+*.tar.md5
+__pycache__/

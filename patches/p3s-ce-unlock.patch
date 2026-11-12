@@ -1,0 +1,13 @@
+--- a/smali_classes2/com/android/server/locksettings/LockSettingsService.smali
++++ b/smali_classes2/com/android/server/locksettings/LockSettingsService.smali
+@@ -23265,6 +23265,10 @@
+ 
+     iget-object p0, p0, Lcom/android/server/locksettings/LockSettingsService;->mStorageManagerInternal:Lcom/android/server/StorageManagerService$StorageManagerInternalImpl;
+ 
++    # The p3s port uses donor vold. It accepts the derived FBE secret alone.
++    # Keep the verified HAT requirement above for this legacy launch device.
++    const/4 p2, 0x0
++
+     invoke-virtual {p0, p1, p2, v2}, Lcom/android/server/StorageManagerService$StorageManagerInternalImpl;->unlockCeStorage(I[B[B)V
+ 
+     goto :goto_3
