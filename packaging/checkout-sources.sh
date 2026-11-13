@@ -9,11 +9,12 @@ checkout() {
     git init -q "$dest/$name"
     git -C "$dest/$name" remote add origin "$url"
     git -C "$dest/$name" fetch --depth=1 origin "$commit"
-    git -C "$dest/$name" checkout -q -b p3s-r6 FETCH_HEAD
+    git -C "$dest/$name" checkout -q -b p3s-r7 FETCH_HEAD
     test "$(git -C "$dest/$name" rev-parse HEAD)" = "$commit"
     git -C "$dest/$name" apply --index "$root/patches/$name.patch"
 }
 checkout rom https://github.com/devcore94/MonsterROM.git 9353588dce5cd12baebbb0effa124372e45544cf
+git -C "$dest/rom" apply --index "$root/patches/p3s-sdk37.patch"
 checkout kernel https://github.com/FlopKernel-Series/flop_exynos2100_kernel.git 113ce9d986f74e1526981324ec164e4d90930071
 git -C "$dest/rom" submodule update --init --recursive
 git -C "$dest/kernel" submodule update --init build/mkbootimg

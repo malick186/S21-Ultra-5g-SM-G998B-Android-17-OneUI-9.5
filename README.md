@@ -1,8 +1,8 @@
 # MonsterROM Android 17 for Galaxy S21 Ultra 5G (Exynos)
 
-**Target: Samsung SM-G998B, codename `p3s`. Current development release: Beta 2 r6, 13 November 2026.** This repository consolidates the source changes and runtime fixes tested on one SM-G998B. The repository URL uses “SM-G99B”; the supported hardware model is **SM-G998B**. Maintained here by **malick186**. This is an unofficial port built on MonsterROM and UN1CA.
+**Target: Samsung SM-G998B, codename `p3s`. Current development release: Beta 2 r7, 14 November 2026.** This repository consolidates the source changes and runtime fixes tested on one SM-G998B. The repository URL uses “SM-G99B”; the supported hardware model is **SM-G998B**. Maintained here by **malick186**. This is an unofficial port built on MonsterROM and UN1CA.
 
-**Release status:** Android reached One UI Home on the reference handset after the individual fixes. The combined r6 recovery installer has been assembled on the host. A fresh-device r6 installation and first PIN unlock remain untested. Existing users of the working post-r5 setup have no reason to clean-flash solely to match this tag.
+**Release status:** Android reached One UI Home on the reference handset after the individual fixes. The API 37.0 correction was tested on the reference handset after reboot. The r7 installer integrates it directly into the system and product partitions. A clean r7 installation and first PIN unlock remain untested. Existing users of the working post-r5 setup have no reason to clean-flash solely to match this tag.
 
 ## Hardware, software and observed behavior
 
@@ -29,14 +29,15 @@
 | Post-r5 framework and device fixes | Added early startup/hardware diagnostics, corrected the PIN-to-CE storage handoff, restored the S21 VaultKeeper libraries during startup, and retained the QHD+/640 dpi display profile. Verified touch on the shade, LTE and PIN-to-Home on the reference device. |
 | Post-r5 shade experiments | Tested renderer and compilation behavior, conversation-icon layout guards and group-count label guards. The last guard skipped two redundant writes per measured final rebuild, but late frames did not improve. The original System UI was restored. SQL and reverted patches are retained under `tests/shade/`. |
 | **Beta 2 r6** | Consolidated the working boot, vendor boot, DTBO, ODM, verification images and runtime fixes into one recovery ZIP. Added input pinning, clean-storage checks and release verification. The installer stages the runtime files before flashing partitions. This packaging step requires its own clean-install test. |
+| **Beta 2 r7** | Corrects the public minor SDK to the donor’s Android 17 API 37.0 across system, embedded system_ext and product. The former 37.2 label led Maps to load a missing MemoryBudgetManager class. Play services also logged a missing SignedPackageWithMetadata class. With the equivalent boot-time correction, Maps cold-launched and accepted a location search, and Google Settings opened without either exception during the test window. The clean installer sets the values in the images before first boot and does not require a root script for this correction. |
 
 ## Downloads and installation status
 
-The GitHub source archives contain the development project. For the recovery installer, the filename is **MonsterROM-p3s-SM-G998B-A17-beta2-r6.zip**. Check the SHA-256 against the release checksum before use. The installer is for an unlocked SM-G998B on **G998BXXSJHZC2, bootloader revision 19**, with a compatible TWRP that preserves boot. It checks these conditions before writing partitions. It does not install recovery, a modem or a bootloader.
+The GitHub source archives contain the development project. For the recovery installer, the filename is **MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip**. Check the SHA-256 against the release checksum before use. The installer is for an unlocked SM-G998B on **G998BXXSJHZC2, bootloader revision 19**, with a compatible TWRP that preserves boot. It checks these conditions before writing partitions. It does not install recovery, a modem or a bootloader.
 
-The clean-test procedure requires an off-device backup and freshly formatted Data. Format Data **erases apps, settings and internal storage**. Recovery must mount real Data and Metadata read-write before installation. Formatting after installation removes runtime fixes. Use the original matching Samsung BL/AP/CP/CSC repair set as the recovery route. A complete r6 clean flash has not yet been validated, so this is a development candidate.
+The clean-test procedure requires an off-device backup and freshly formatted Data. Format Data **erases apps, settings and internal storage**. Recovery must mount real Data and Metadata read-write before installation. Formatting after installation removes runtime fixes. Use the original matching Samsung BL/AP/CP/CSC repair set as the recovery route. A complete r7 clean flash has not yet been validated, so this is a development candidate.
 
-[Release page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) · [Installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r6.zip.sha256) · [Build instructions](docs/BUILD.md)
+[Release page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) · [Installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) · [Build instructions](docs/BUILD.md)
 
 ## Source and credits
 

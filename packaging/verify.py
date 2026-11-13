@@ -23,12 +23,14 @@ def signature(path, cert, tmp):
                 dest.write(chunk);size-=len(chunk)
         if p.wait(): raise ValueError("OTA signature verification failed")
 def verify(archive, cert, scratch):
+    from sdk37_images import FILES, mounted
+    blocks=json.loads((HERE/"r7-blocks.json").read_text())
     hashes=json.loads((HERE/"inputs.json").read_text())
     with tempfile.TemporaryDirectory(dir=scratch) as work, zipfile.ZipFile(archive) as z:
         tmp=Path(work)
         signature(archive,cert,tmp)
         sizes=dict((n,int(s)) for n,s in re.findall(r'^resize (\w+) (\d+)$',z.read("dynamic_partitions_op_list").decode(),re.M))
-        for name,expected in {**EXPECTED,"odm":hashes["odm.img"]}.items():
+        for name,expected in {**EXPECTED,**{p:v["sha256"] for p,v in blocks.items()},"odm":hashes["odm.img"]}.items():
             with z.open(name+".new.dat.br") as src, (tmp/"payload.br").open("wb") as dest: shutil.copyfileobj(src,dest,8<<20)
             with (tmp/"image").open("w+b") as img, subprocess.Popen(["brotli","-d","-c",tmp/"payload.br"],stdout=subprocess.PIPE) as proc:
                 img.truncate(sizes[name])
@@ -50,7 +52,19 @@ def verify(archive, cert, scratch):
                 img.flush()
             actual=hashfile(tmp/"image")
             print(name,actual,"match" if actual==expected else "DIFFERS",flush=True)
-            if actual!=expected: raise ValueError(name+" differs from the running reference device")
+            if actual!=expected: raise ValueError(name+" differs from the pinned release image")
+            if name in blocks:
+                image=(tmp/"image").rename(tmp/(name+".img"))
+                avb=cert.parent.parent/"out/tools/bin/avbtool"
+                subprocess.run([avb,"verify_image","--image",image,"--key",cert.parent/"avb/testkey_rsa4096.pem"],check=True)
+                with mounted(image) as root:
+                    for path, keys in FILES[name].items():
+                        lines=(root/path).read_text().splitlines()
+                        for key in keys:
+                            values=[line for line in lines if line.startswith(key+"=")]
+                            if values!=[key+"=37.0"]: raise ValueError((path,key,values))
+                            print(name,path,values[0],flush=True)
+                image.unlink()
         for name,h in hashes.items():
             if name=="odm.img": continue
             member=name if name.endswith(".img") else "p3s-runtime/"+name

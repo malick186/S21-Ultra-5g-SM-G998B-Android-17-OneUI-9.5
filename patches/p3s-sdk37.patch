@@ -1,0 +1,28 @@
+--- a/unica/patches/__props/customize.sh
++++ b/unica/patches/__props/customize.sh
+@@ -70,6 +70,9 @@
+     {
+         local PARTITION="$1"
+         local OLD_ID OLD_INCREMENTAL VALUE PROP
++        local sdk_full=37.2
++        # The Samsung p3s donor implements the 37.0 framework API.
++        if [ "$TARGET_CODENAME" = p3s ]; then sdk_full=37.0; fi
+         [ "$(GET_PROP "$PARTITION" "ro.${PARTITION}.build.version.sdk")" = "37" ] || return 0
+         OLD_ID="$(GET_PROP "$PARTITION" "ro.${PARTITION}.build.id")"
+         OLD_INCREMENTAL="$(GET_PROP "$PARTITION" "ro.${PARTITION}.build.version.incremental")"
+@@ -87,13 +90,13 @@
+         done
+         SET_PROP "$PARTITION" "ro.${PARTITION}.build.id" "CP4A.261005.017"
+         SET_PROP "$PARTITION" "ro.${PARTITION}.build.version.incremental" "S942BXXU5CZJJ"
+-        SET_PROP "$PARTITION" "ro.${PARTITION}.build.version.sdk_full" "37.2"
++        SET_PROP "$PARTITION" "ro.${PARTITION}.build.version.sdk_full" "$sdk_full"
+         if [ "$(GET_PROP "$PARTITION" "ro.build.version.sdk")" = "37" ]; then
+             SET_PROP "$PARTITION" "ro.build.id" "CP4A.261005.017"
+             SET_PROP "$PARTITION" "ro.build.PDA" "S942BXXU5CZJJ"
+             SET_PROP "$PARTITION" "ro.build.display.id" "CP4A.261005.017.S942BXXU5CZJJ"
+             SET_PROP "$PARTITION" "ro.build.version.incremental" "S942BXXU5CZJJ"
+-            SET_PROP "$PARTITION" "ro.build.version.sdk_full" "37.2"
++            SET_PROP "$PARTITION" "ro.build.version.sdk_full" "$sdk_full"
+             SET_PROP "$PARTITION" "ro.build.version.oneui" "90500"
+         fi
+     }

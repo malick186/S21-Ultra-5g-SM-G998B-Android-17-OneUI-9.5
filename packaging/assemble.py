@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the SM-G998B r6 recovery candidate from a verified local r5 and fixed inputs."""
+"""Assemble the SM-G998B r7 recovery candidate from a verified local r5 and fixed inputs."""
 import argparse
 import hashlib
 import json
@@ -17,13 +17,17 @@ def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
-def build(base, inputs, source, output, scratch):
+def build(base, inputs, source, output, scratch, blocks):
     if output.exists():
         raise FileExistsError(output)
     hashes = json.loads((HERE / "inputs.json").read_text())
     files = {name: (HERE.parent / "runtime" if name.endswith(".sh") else inputs) / name for name in hashes}
     if digest(base) != BASE_SHA or any(digest(files[n]) != h for n, h in hashes.items()):
         raise ValueError("Base installer or payload hash differs from release inputs")
+    partitions = json.loads((HERE / "r7-blocks.json").read_text())
+    for part, record in partitions.items():
+        if digest(blocks / (part+".new.dat.br")) != record["brotli_sha256"]:
+            raise ValueError("Unverified block payload: "+part)
     with tempfile.TemporaryDirectory(dir=scratch) as staging:
         tmp = Path(staging)
         unsigned = tmp / "unsigned.zip"
@@ -38,11 +42,11 @@ def build(base, inputs, source, output, scratch):
             if '/dev/block/by-name/recovery' in install or 'firmware/' in install:
                 raise ValueError("Unexpected physical partition writer")
             runtime = sorted(n for n in files if not n.endswith(".img"))
-            edify = guards + 'ui_print("MonsterROM p3s A17 beta 2 r6 - SM-G998B clean-install candidate");\n'
-            edify += 'assert(package_extract_dir("p3s-runtime", "/tmp/p3s-r6"));\n'
-            edify += 'run_program("/sbin/sh", "/tmp/p3s-r6/stage-runtime.sh") == 0 || abort("E3005: runtime staging failed before partition writes; inspect recovery log, Data and Metadata mounts.");\n'
-            edify += install + 'set_progress(1.0);\nui_print("r6 installed. Reboot System; preserve Data after installation.");\n'
-            changes = {SCRIPT: edify.encode(), "build_info.txt": src.read("build_info.txt").replace(b"BETA2-r5",b"BETA2-r6"),
+            edify = guards + 'ui_print("MonsterROM p3s A17 beta 2 r7 - SM-G998B clean-install candidate");\n'
+            edify += 'assert(package_extract_dir("p3s-runtime", "/tmp/p3s-r7"));\n'
+            edify += 'run_program("/sbin/sh", "/tmp/p3s-r7/stage-runtime.sh") == 0 || abort("E3005: runtime staging failed before partition writes; inspect recovery log, Data and Metadata mounts.");\n'
+            edify += install + 'set_progress(1.0);\nui_print("r7 installed. Reboot System; preserve Data after installation.");\n'
+            changes = {SCRIPT: edify.encode(), "build_info.txt": src.read("build_info.txt").replace(b"BETA2-r5",b"BETA2-r7"),
                        "p3s-runtime/stage-runtime.sh": (HERE/"stage-runtime.sh").read_bytes(),
                        "p3s-runtime/runtime.sha256": "".join(f"{hashes[n]}  {n}\n" for n in runtime).encode()}
             for n in runtime:
@@ -53,14 +57,23 @@ def build(base, inputs, source, output, scratch):
             size = len(odm)
             if size % 4096 or f"resize odm {size}\n".encode() not in src.read("dynamic_partitions_op_list"):
                 raise ValueError("ODM partition size mismatch")
-            blocks = size // 4096
+            odm_blocks = size // 4096
             changes["odm.new.dat.br"] = subprocess.run(["brotli","-q","6","-c"],input=odm,capture_output=True,check=True).stdout
-            changes["odm.transfer.list"] = f"4\n{blocks}\n0\n0\nnew 2,0,{blocks}\n".encode()
+            changes["odm.transfer.list"] = f"4\n{odm_blocks}\n0\n0\nnew 2,0,{odm_blocks}\n".encode()
+            block_payloads = {}
+            for part, record in partitions.items():
+                count = record["bytes"] // 4096
+                if f"resize {part} {record['bytes']}\n".encode() not in src.read("dynamic_partitions_op_list"):
+                    raise ValueError("Unexpected logical partition size: "+part)
+                changes[part+".transfer.list"] = f"4\n{count}\n0\n0\nnew 2,0,{count}\n".encode()
+                block_payloads[part+".new.dat.br"] = blocks/(part+".new.dat.br")
             for e in src.infolist():
-                if e.filename in changes or e.filename in ("BETA2_BUILD_PROOF.json","META-INF/com/android/otacert") or e.filename.startswith("firmware/"):
+                if e.filename in changes or e.filename in block_payloads or e.filename in ("BETA2_BUILD_PROOF.json","META-INF/com/android/otacert") or e.filename.startswith("firmware/"):
                     continue
                 with src.open(e) as old, dst.open(e, "w", force_zip64=e.file_size>=2**31) as new:
                     shutil.copyfileobj(old,new,8*1024*1024)
+            for name, path in block_payloads.items():
+                dst.write(path, name, compress_type=zipfile.ZIP_STORED)
             for name,data in changes.items():
                 dst.writestr(name,data,compress_type=zipfile.ZIP_DEFLATED if not name.endswith(".br") else zipfile.ZIP_STORED)
         subprocess.run([source/"out/tools/bin/signapk","-w",source/"security/aosp_testkey.x509.pem",source/"security/aosp_testkey.pk8",unsigned,signed],check=True)
@@ -81,5 +94,5 @@ def build(base, inputs, source, output, scratch):
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ("base","inputs","source","output","scratch"): p.add_argument("--"+name,type=Path,required=True)
+    for name in ("base","inputs","source","output","scratch","blocks"): p.add_argument("--"+name,type=Path,required=True)
     build(**vars(p.parse_args()))

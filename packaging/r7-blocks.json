@@ -1,0 +1,12 @@
+{
+  "system": {
+    "sha256": "c543eec483932009639b0774b33bdb52fe987c35181f8aabd1fdd3f994abcfd6",
+    "bytes": 6702845952,
+    "brotli_sha256": "456929230cdff371a6edfc233a7e0323ce2bf75ebde6e574869e0b677f67368e"
+  },
+  "product": {
+    "sha256": "3d1724d96ba309b40954105a405155ee0405b7a1b01e84604cfb384c56f3b96e",
+    "bytes": 1146241024,
+    "brotli_sha256": "255f029b03f9b31c62dc0db4f3644f7921f829415633a6d34b250b84048939ea"
+  }
+}
