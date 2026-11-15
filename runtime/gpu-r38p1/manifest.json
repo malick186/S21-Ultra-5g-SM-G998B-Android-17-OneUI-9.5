@@ -1,0 +1,42 @@
+[
+  {
+    "path": "/vendor/lib/egl/libGLES_mali.so",
+    "old": "44d1c143785b0df349c1844e89f3aee494ad90ab76ec8674e8cef118e9ff4d11",
+    "new": "64d909a8c21288c85ccfbe5c15c4234a61b7918fc19f6b6d8015b8b1ed1c9685"
+  },
+  {
+    "path": "/vendor/lib/hw/vulkan.mali.so",
+    "old": "deb8c2e907e78205a9b724d17900f0c0f35bd512e2c7bc88134829c8e188c726",
+    "new": "84a802d19b59519e8bc3b710a1a97053517b8fa6061655a0b116fc2d0b85aa35"
+  },
+  {
+    "path": "/vendor/lib64/egl/libGLES_mali.so",
+    "old": "d81c3b6843d03a9babbf6f73f05b96d0f9f2481eb4ccf9239d965504d05fe408",
+    "new": "518e96a79b28f9a8104ac2a3de53bbe8ab3b72d76b3d8ad29e6b34762335067f"
+  },
+  {
+    "path": "/vendor/lib64/hw/vulkan.mali.so",
+    "old": "d07ce20f5794e1c0d36734eb2028dfd8703e327233dcb4b82a055a90e5684e97",
+    "new": "6f18b22bb1d4d953750279880f99064b759014d8acec19e5ca33326350f8666e"
+  },
+  {
+    "path": "/vendor/etc/permissions/android.hardware.vulkan.compute.xml",
+    "old": "65e26b6a034aa3cf8d4821e2820c3a0fcc55307a567dfaf2efde4e9988464561",
+    "new": "65e26b6a034aa3cf8d4821e2820c3a0fcc55307a567dfaf2efde4e9988464561"
+  },
+  {
+    "path": "/vendor/etc/permissions/android.software.vulkan.deqp.level.xml",
+    "old": "a79f4c93aba896221dd63bdae5e1a9a0d9d07c6b01f04a88e9eaefa21119988e",
+    "new": "20b469228d061f98cbe0d09cf5f467646e4b71e163e85964fc6ed97d1aecef22"
+  },
+  {
+    "path": "/vendor/etc/permissions/android.hardware.vulkan.version.xml",
+    "old": "e26ba651f9d3d8892feb7b072aa5d1f51ac2a5e9ed9cfc66f5bf169755bc6e64",
+    "new": "e4674544be7703fdcc26afec72cbaa6d63d905e76bd88377f64003dedec75959"
+  },
+  {
+    "path": "/vendor/etc/permissions/android.hardware.vulkan.level.xml",
+    "old": "8d78cbae54e60692944a5a8ea4fb41a5d8ac3b0f7ca467028e7b8e6552dc13bc",
+    "new": "8d78cbae54e60692944a5a8ea4fb41a5d8ac3b0f7ca467028e7b8e6552dc13bc"
+  }
+]

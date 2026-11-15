@@ -6,6 +6,8 @@
 
 ## Hardware, software and observed behavior
 
+**Latest reference-device update (15 November 2026):** Mali r38p1 / Vulkan 1.3 is active through a guarded, reversible early-boot loader. QHD+ and 640 dpi are retained. The ART/profile repair and GPU update are **post-r7 runtime changes**, not a new flashable release. Video freezing and shade lag remain unresolved. [Changes, validation, credits and rollback](docs/POST-R7-UPDATES.md).
+
 | Area | What the port contains or the reference device demonstrated |
 |---|---|
 | Platform | Galaxy S26 SM-S942B ESSI donor, Android 17 / SDK 37, on S21 Ultra vendor hardware. One UI reports `90500`. MonsterROM describes this as a 9.5 backport based on One UI 9.0, with selected QPR2 components. |
@@ -33,6 +35,8 @@
 
 ## Downloads and installation status
 
+The later [post-r7 updates](docs/POST-R7-UPDATES.md) are documented separately with source-only GPU staging support. They have not been merged into or clean-flash-tested as a new full ROM ZIP. Driver binaries and full installers remain local.
+
 The GitHub source archives contain the development project. For the recovery installer, the filename is **MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip**. Check the SHA-256 against the release checksum before use. The installer is for an unlocked SM-G998B on **G998BXXSJHZC2, bootloader revision 19**, with a compatible TWRP that preserves boot. It checks these conditions before writing partitions. It does not install recovery, a modem or a bootloader.
 
 The clean-test procedure requires an off-device backup and freshly formatted Data. Format Data **erases apps, settings and internal storage**. Recovery must mount real Data and Metadata read-write before installation. Formatting after installation removes runtime fixes. Use the original matching Samsung BL/AP/CP/CSC repair set as the recovery route. A complete r7 clean flash has not yet been validated, so this is a development candidate.
@@ -40,6 +44,8 @@ The clean-test procedure requires an off-device backup and freshly formatted Dat
 [Release page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) · [Installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) · [Build instructions](docs/BUILD.md)
 
 ## Source and credits
+
+The optional Exynos 2100 GPU update is ported by **EliteUI / elitetest1**: [upstream r38p1 release](https://github.com/elitetest1/GpuDriverUpdate_Exynos2100/releases/tag/v1.3). Only the local guarded loader and hash manifest are published here; Samsung/Arm driver binaries are excluded.
 
 | Component | Source and attribution |
 |---|---|
