@@ -1,8 +1,34 @@
-# MonsterROM Android 17 for Galaxy S21 Ultra 5G (Exynos)
+# Samsung Galaxy S21 Ultra 5G SM-G998B — MonsterROM Android 17
+
+Unofficial **Android 17 custom ROM development for the Samsung Galaxy S21 Ultra 5G SM-G998B** (`p3s`, Exynos 2100), based on MonsterROM and UN1CA. Find device compatibility, installation requirements, kernel patches, build instructions and documented runtime fixes here.
 
 **Target: Samsung SM-G998B, codename `p3s`. Current development release: Beta 2 r7, 14 November 2026.** This repository consolidates the source changes and runtime fixes tested on one SM-G998B. The repository URL uses “SM-G99B”; the supported hardware model is **SM-G998B**. Maintained here by **malick186**. This is an unofficial port built on MonsterROM and UN1CA.
 
 **Release status:** Android reached One UI Home on the reference handset after the individual fixes. The API 37.0 correction was tested on the reference handset after reboot. The r7 installer integrates it directly into the system and product partitions. A clean r7 installation and first PIN unlock remain untested. Existing users of the working post-r5 setup have no reason to clean-flash solely to match this tag.
+
+## Quick navigation
+
+- [Device compatibility and requirements](#device-compatibility-and-requirements)
+- [Hardware, software and observed behavior](#hardware-software-and-observed-behavior)
+- [Version history and changelog](#version-history-and-changelog)
+- [ROM downloads and installation status](#rom-downloads-and-installation-status)
+- [Frequently asked questions](#frequently-asked-questions)
+- [Source code, licenses and credits](#source-code-licenses-and-credits)
+- [Build MonsterROM for SM-G998B](docs/BUILD.md)
+- [Post-r7 GPU update, validation and rollback](docs/POST-R7-UPDATES.md)
+
+## Device compatibility and requirements
+
+| Requirement | Supported development target |
+|---|---|
+| Phone | Samsung Galaxy S21 Ultra 5G |
+| Model | **SM-G998B**; the repository name's `SM-G99B` is a naming typo |
+| Device codename / chipset | `p3s` / Samsung Exynos 2100 |
+| Target firmware | `G998BXXSJHZC2`, bootloader revision **19** |
+| Installation environment | Unlocked bootloader and compatible TWRP that preserves boot |
+| Current candidate | MonsterROM Android 17 Beta 2 r7; a complete clean installation remains unvalidated |
+
+Compatibility with other S21, S21+, S21 Ultra model numbers or Snapdragon variants is not established by this project. Read the [installation status and data-erasure requirements](#rom-downloads-and-installation-status) before considering a flash.
 
 ## Hardware, software and observed behavior
 
@@ -17,7 +43,7 @@
 | Unlock and telephony | A private PIN opened credential-encrypted storage and One UI Home after restart. The S21 stock VaultKeeper client and HIDL library were restored ahead of framework startup. Slot 1 registered on LTE. 5G registration, payment certification and broad carrier compatibility remain unverified. |
 | Root and performance | KernelSU Next root worked on the reference phone. System UI uses its original APK. Grouped-notification remeasurement and occasional missed frames remain measurable at QHD+. |
 
-## Version history
+## Version history and changelog
 
 | Revision | Changes and outcome |
 |---|---|
@@ -33,7 +59,7 @@
 | **Beta 2 r6** | Consolidated the working boot, vendor boot, DTBO, ODM, verification images and runtime fixes into one recovery ZIP. Added input pinning, clean-storage checks and release verification. The installer stages the runtime files before flashing partitions. This packaging step requires its own clean-install test. |
 | **Beta 2 r7** | Corrects the public minor SDK to the donor’s Android 17 API 37.0 across system, embedded system_ext and product. The former 37.2 label led Maps to load a missing MemoryBudgetManager class. Play services also logged a missing SignedPackageWithMetadata class. With the equivalent boot-time correction, Maps cold-launched and accepted a location search, and Google Settings opened without either exception during the test window. The clean installer sets the values in the images before first boot and does not require a root script for this correction. |
 
-## Downloads and installation status
+## ROM downloads and installation status
 
 The later [post-r7 updates](docs/POST-R7-UPDATES.md) are documented separately with source-only GPU staging support. They have not been merged into or clean-flash-tested as a new full ROM ZIP. Driver binaries and full installers remain local.
 
@@ -43,7 +69,29 @@ The clean-test procedure requires an off-device backup and freshly formatted Dat
 
 [Release page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) · [Installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) · [Build instructions](docs/BUILD.md)
 
-## Source and credits
+## Frequently asked questions
+
+### Is this an official Samsung Android 17 update?
+
+No. This is an unofficial MonsterROM and UN1CA-based development port maintained here by malick186. It is not a Samsung release.
+
+### Which Galaxy S21 Ultra model does this ROM target?
+
+The target is the Exynos 2100 **Samsung Galaxy S21 Ultra 5G SM-G998B**, codename `p3s`. The `SM-G99B` spelling in the repository URL does not identify an additional supported model. Other variants are not validated here.
+
+### Is MonsterROM Beta 2 r7 ready for a daily driver?
+
+This repository documents a development candidate. Individual fixes reached One UI Home on the reference handset, but a complete r7 clean installation and first PIN unlock remain untested. Video freezing and notification-shade lag remain unresolved; 5G registration, payment certification and broad carrier compatibility are unverified.
+
+### Does GitHub's Download ZIP contain the flashable ROM?
+
+No. GitHub's source ZIP contains this development project. The recovery installer is named `MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip`; full installers and proprietary driver binaries remain local. The [releases page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) and [published SHA-256 checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) are references, not a claim that an installer binary is publicly available.
+
+### Where are the build instructions and Exynos 2100 GPU updates?
+
+Start with the [SM-G998B ROM build instructions](docs/BUILD.md). The [post-r7 update notes](docs/POST-R7-UPDATES.md) cover the Mali r38p1 / Vulkan 1.3 runtime update, validation, upstream credits and rollback. Those runtime changes are not a new flashable ROM release.
+
+## Source code, licenses and credits
 
 The optional Exynos 2100 GPU update is ported by **EliteUI / elitetest1**: [upstream r38p1 release](https://github.com/elitetest1/GpuDriverUpdate_Exynos2100/releases/tag/v1.3). Only the local guarded loader and hash manifest are published here; Samsung/Arm driver binaries are excluded.
 
