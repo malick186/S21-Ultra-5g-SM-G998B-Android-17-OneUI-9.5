@@ -6,7 +6,9 @@
 
 ## Hardware, software and observed behavior
 
-**Latest reference-device update (15 November 2026):** Mali r38p1 / Vulkan 1.3 is active through a guarded, reversible early-boot loader. QHD+ and 640 dpi are retained. The ART/profile repair and GPU update are **post-r7 runtime changes**, not a new flashable release. Video freezing and shade lag remain unresolved. [Changes, validation, credits and rollback](docs/POST-R7-UPDATES.md).
+**Latest reference-device update (16 November 2026):** SBC Bluetooth media audio worked on a laptop receiver after disabling SBC hardware offload; the setting is saved persistently, but reboot and car-call testing remain open. [Workaround, comparison and rollback](docs/BLUETOOTH-SBC-OFFLOAD.md). This is a post-r7 runtime change, not a new flashable release.
+
+**GPU reference-device update (15 November 2026):** Mali r38p1 / Vulkan 1.3 is active through a guarded, reversible early-boot loader. QHD+ and 640 dpi are retained. The ART/profile repair and GPU update are **post-r7 runtime changes**, not a new flashable release. Video freezing and shade lag remain unresolved. [Changes, validation, credits and rollback](docs/POST-R7-UPDATES.md).
 
 | Area | What the port contains or the reference device demonstrated |
 |---|---|

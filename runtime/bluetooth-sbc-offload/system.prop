@@ -1,0 +1,4 @@
+# SM-G998B reference port: use software encoding for SBC A2DP.
+# Other Samsung offload codec entries retain their original values.
+# See docs/BLUETOOTH-SBC-OFFLOAD.md before applying to another build.
+persist.bluetooth.samsung.a2dp_offload.cap=aptx-ssc-hifi

@@ -1,6 +1,10 @@
-# Post-r7 reference-device updates — 15 November 2026
+# Post-r7 reference-device updates — through 16 November 2026
 
 These are runtime changes verified on the maintainer's SM-G998B, not a new ROM release. The published r7 manifest and local r7 flashable ZIP are unchanged. No clean installer containing these later changes has been built or tested.
+
+## SBC Bluetooth audio — 16 November
+
+The laptop receiver reproduced silent SBC playback with Samsung hardware offload. The same clearer tone was audible through software encoding, silent with original offload restored, and audible again after disabling SBC offload only. The persistent Samsung offload capability is now `aptx-ssc-hifi`. Reconnect and persistent-storage readback passed; reboot, car media and HFP call audio remain untested. [Property source, evidence, application, clean-build guidance and rollback](BLUETOOTH-SBC-OFFLOAD.md). This workaround does not alter r7's ZIP.
 
 ## GPU r38p1
 
@@ -54,7 +58,7 @@ Normal reboot/PIN-to-Home succeeded afterward. Avoid a framework-only/zygote res
 - Local H.264 and VP9 playback in Samsung Video, and local H.264 in Chrome, were smooth using Exynos hardware decoders before the GPU update. Forty-eight sampled vendor codec libraries/configs matched the S21 stock baseline; framework compatibility was not thereby proven.
 - Internal recordings showed changing pictures when the user reported a physical-screen freeze. One trace lost its first seconds; a shorter follow-up retained them. Do not use the incomplete capture to rule out a startup fault.
 - Display interrupts continued near 60 Hz and the controller error flag was zero. Requested DMA-fence events were unavailable and debugfs could not be mounted. These checks do not prove panel scanout is correct. A synchronized external-camera/internal capture is still needed.
-- Car Bluetooth media audio remains unverified because the head unit was unavailable. No 5G fix has been demonstrated.
+- SBC media silence was reproduced and worked around using a laptop receiver, as documented above. The car head unit and HFP call audio remain untested. No 5G fix has been demonstrated.
 - A battery voltage-reporting unit correction was drafted in a separate local kernel tree but was not built or flashed; it is not part of this update.
 
 Recordings, private logs, firmware binaries, full ZIPs and signing keys remain local. GPU activation must not be advertised as a confirmed video-freeze fix.
