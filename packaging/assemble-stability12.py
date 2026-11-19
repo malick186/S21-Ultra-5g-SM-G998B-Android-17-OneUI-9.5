@@ -54,9 +54,10 @@ def payload_info(archive, name):
     return result
 
 
-def verify_archive(path, certificate, scratch):
-    entries = PINS["entry_sha256"]
-    expected = set(entries) | {CERT_ENTRY} | {f"{part}.new.dat.br" for part in IMAGES}
+def verify_archive(path, certificate, scratch, pins=PINS):
+    entries = pins["entry_sha256"]
+    images = pins["manifest"]["images"]
+    expected = set(entries) | {CERT_ENTRY} | {f"{part}.new.dat.br" for part in images}
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         if len(names) != len(expected) or set(names) != expected:
@@ -67,7 +68,7 @@ def verify_archive(path, certificate, scratch):
             with archive.open(name) as stream:
                 if sha256(stream)[0] != expected_hash:
                     raise ValueError(f"Unexpected ZIP entry content: {name}")
-        for part, image in IMAGES.items():
+        for part, image in images.items():
             if payload_info(archive, f"{part}.new.dat.br") != (image["sha256"], image["bytes"]):
                 raise ValueError(f"Decoded image mismatch for {part}")
             print(f"Verified full {part} payload", flush=True)

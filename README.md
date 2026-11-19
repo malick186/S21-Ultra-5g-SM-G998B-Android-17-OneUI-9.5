@@ -38,6 +38,10 @@ This repository contains the source changes and validation notes from one refere
 
 The [Stability 1.2 GitHub release](https://github.com/malick186/S21-Ultra-5g-SM-G998B-Android-17-OneUI-9.5/releases/tag/stability-1.2) provides the source archive and release notes. The tested Stability 1.2 recovery ZIP, **MonsterROM-p3s-SM-G998B-Stability-1.2-DEV-LOCAL.zip**, stays local because it contains proprietary firmware and apps and a tester-specific public ADB key. Its SHA-256 and installation requirements are recorded in the [Stability 1.2 notes](docs/STABILITY-1.2.md).
 
+The [key-free local installer recipe](docs/SHARING-STABILITY-1.2.md) removes
+the tester's ADB authorization and leaves USB debugging under Android's
+normal user control.
+
 The historical Beta 2 r7 release remains available with its [installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) and [build instructions](docs/BUILD.md). The complete r7 installer has separate validation status from Stability 1.2.
 
 ## Source and credits
