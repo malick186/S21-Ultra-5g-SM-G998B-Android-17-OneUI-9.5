@@ -1,0 +1,32 @@
+service p3s-ce-profile /system/bin/sh /odm/etc/p3s-runtime/bootstrap.sh
+    disabled
+    oneshot
+    user root
+    group root
+    seclabel u:r:ksu:s0
+
+on post-fs-data
+    exec_start p3s-ce-profile
+
+service p3s-display-profile /system/bin/sh /odm/etc/p3s-runtime/shell-profile.sh
+    disabled
+    oneshot
+    user shell
+    group shell log readproc
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start p3s-display-profile
+
+service p3s-debug-adb /system/bin/sh /odm/etc/p3s-runtime/debug-adb.sh
+    disabled
+    oneshot
+    user root
+    group root
+    seclabel u:r:ksu:s0
+
+on boot
+    start p3s-debug-adb
+
+on property:debug.p3s.fix.done=1
+    write /metadata/p3s-shell-profile.txt "${debug.p3s.fix.status.0:--}|${debug.p3s.fix.status.1:--}|${debug.p3s.fix.status.2:--}|${debug.p3s.fix.status.3:--}|${debug.p3s.fix.status.4:--}|${debug.p3s.fix.status.5:--}|${debug.p3s.fix.status.6:--}|${debug.p3s.fix.status.7:--}|${debug.p3s.fix.status.8:--}|${debug.p3s.fix.status.9:--}|${debug.p3s.fix.status.10:--}|${debug.p3s.fix.status.11:--}|${debug.p3s.fix.status.12:--}|${debug.p3s.fix.status.13:--}|${debug.p3s.fix.status.14:--}|${debug.p3s.fix.status.15:--}|${debug.p3s.fix.status.16:--}|${debug.p3s.fix.status.17:--}|${debug.p3s.fix.status.18:--}|${debug.p3s.fix.status.19:--}|${debug.p3s.fix.status.20:--}|${debug.p3s.fix.status.21:--}|${debug.p3s.fix.status.22:--}|${debug.p3s.fix.status.23:--}"

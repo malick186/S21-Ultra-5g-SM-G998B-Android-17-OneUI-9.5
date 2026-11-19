@@ -1,0 +1,78 @@
+{
+  "reference_archive": {
+    "name": "MonsterROM-p3s-SM-G998B-Stability-1.2-DEV-LOCAL.zip",
+    "bytes": 8688687572,
+    "sha256": "60ee841108861e293cef470f4dd351699c27141f2231e7774260f0aa7aa43c5d"
+  },
+  "manifest": {
+    "device": "p3s",
+    "model": "SM-G998B",
+    "version": "stability-1.2-dev-local",
+    "template_zip_sha256": "efc541dd481446a60f2698de20567ee867805bf2caf21b8f13d5b38ea42f9b71",
+    "required_firmware": "G998BXXSJHZC2",
+    "images": {
+      "system": {
+        "sha256": "084f0f4d59f01702acc8d112b8734b76cf1809a37e337378fdcdf6c8fffececc",
+        "bytes": 6702845952
+      },
+      "vendor": {
+        "sha256": "8f47ed72049897f0b881909d5a26514b3be8b42a79b9311533ce25bedda21b8b",
+        "bytes": 2338369536
+      },
+      "product": {
+        "sha256": "fdfa83dc4f453f62b07077c6f2057848b0ffdbba2a8025d54cbdb551df2a9fad",
+        "bytes": 1146241024
+      },
+      "odm": {
+        "sha256": "523cc3f958a714fdac6aa8bf57a77e9921afa76b511f1ca7e567d51538ef2575",
+        "bytes": 4194304
+      }
+    },
+    "kernel": "inherited r7",
+    "inherited_product": [
+      "API 37.0",
+      "Bluetooth SBC software encoding default"
+    ],
+    "component_trials": {
+      "display": "SM-G998B: physical edge fit confirmed at QHD+/640, FHD+/480 and HD+/320. HD+/320 retained through normal reboot with matching output and composition dimensions. No Data format.",
+      "night_camera": "16/16 frames, NO_ERROR, DRAFT->COMPLETE, JPEG opened",
+      "mali": "Mali r38p0"
+    },
+    "fresh_storage_preflight": "Stability 1.1",
+    "personalized_adb_public_key": true,
+    "adb_authentication_required": true,
+    "full_clean_installer_device_tested": false,
+    "known_video_issue": "deferred"
+  },
+  "reference_device_validation": {
+    "date": "2026-11-20",
+    "full_clean_installer_device_tested": true,
+    "setup": "One UI Home reached",
+    "display_modes": ["HD+ at 320 dpi", "FHD+ at 480 dpi", "QHD+ at 640 dpi"],
+    "night_capture": "12/12 frames, NO_ERROR, JPEG saved and opened"
+  },
+  "entry_sha256": {
+    "META-INF/com/android/metadata": "87c0bab8dcc304162622c31c80af3932a5197c5cb2d35e29ae1d27664fd48984",
+    "META-INF/com/android/metadata.pb": "dbdf806ff117324f24febc66924a321c0d871ba2dbe3947621050876f9498fba",
+    "dynamic_partitions_op_list": "7b4b659e6956394906880c589afd43a10ffc66f7967a306ba1ec59526441e6b0",
+    "odm.patch.dat": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "odm.transfer.list": "74b858b22ee885dc778168b3fd3e008449aae3cadd6eb02d53422304a1733bc8",
+    "p3s-stability-preflight.sh": "44ac6ad4c759f955edad35695acaf517f1bacfd01c06ba061766681333480461",
+    "product.patch.dat": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "product.transfer.list": "d09ac91b8606ad8e02d8dc69d9dc23d174c66928de571b0198b3a0c182d00fa2",
+    "system.patch.dat": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "system.transfer.list": "02b658a9adaa519d516b83f2fcd8539c775b70573e970f27ae650f995e592e7c",
+    "vendor.patch.dat": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "vendor.transfer.list": "286800ee508842583da637ce6180d8a41d9018c653e38f5eec103bd627135329",
+    "META-INF/com/google/android/update-binary": "28378c9dcae8a0e6035e5f90e66c2a128eab3cce2982e43aa33424542507664a",
+    "boot.img": "31c2b8537e171376c6b1b176ab25720e02a9acca929d067697db398059d533f9",
+    "dtbo.img": "76c6f8d13fc143636fad880ac6de7c3ebc1f37c7fe20e999539cfa40f286e35e",
+    "unsparse_super_empty.img": "eb6d0996a8a61815d61550993ec47c03a06ea5c23754b05f541feb696476e5dd",
+    "vbmeta.img": "f111567249c567e73230fedbfc768c3b8398568de9efbb027f72d39b98ac619e",
+    "vbmeta_system.img": "5be409f10bace1c3bf68410ae48f9fa3f978750640a44f204d4817c687e7338f",
+    "vendor_boot.img": "e29054b0d9fd5193020f83edb4d40cfd0bd5cbe2509c078a6def236b5616582d",
+    "META-INF/com/google/android/updater-script": "6b091f65e6d6cb7e8c5aa60e37195b46895d09bee28cbf96bc82c02c345516e0",
+    "STABILITY_BUILD.json": "9f39092f0c11694b4c4cc9d26a9191c7a391dff34802b82ab5e319dccea7603b",
+    "build_info.txt": "39794099203a204e72b718dc7cfbd42ad46e4342b1d294e5019d4a18b505691e"
+  }
+}
