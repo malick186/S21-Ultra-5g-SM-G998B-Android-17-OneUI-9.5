@@ -1,49 +1,42 @@
-# Samsung Galaxy S21 Ultra 5G SM-G998B — MonsterROM Android 17
+# Samsung Galaxy S21 Ultra 5G SM-G998B: MonsterROM Android 17
 
-Unofficial **Android 17 custom ROM development for the Samsung Galaxy S21 Ultra 5G SM-G998B** (`p3s`, Exynos 2100), based on MonsterROM and UN1CA. Find device compatibility, installation requirements, kernel patches, build instructions and documented runtime fixes here.
+**Stability 1.2 DEV LOCAL** passed a clean install on the Exynos Galaxy S21 Ultra **SM-G998B** (`p3s`) on 20 November 2026. Setup Wizard reached One UI Home, all three display modes fit and responded to touch, and Night mode completed a 12-frame capture and saved an openable JPEG. [Stability 1.2 validation and sources](docs/STABILITY-1.2.md)
 
-**Target: Samsung SM-G998B, codename `p3s`. Current development release: Beta 2 r7, 14 November 2026.** This repository consolidates the source changes and runtime fixes tested on one SM-G998B. The repository URL uses “SM-G99B”; the supported hardware model is **SM-G998B**. Maintained here by **malick186**. This is an unofficial port built on MonsterROM and UN1CA.
-
-**Release status:** Android reached One UI Home on the reference handset after the individual fixes. The API 37.0 correction was tested on the reference handset after reboot. The r7 installer integrates it directly into the system and product partitions. A clean r7 installation and first PIN unlock remain untested. Existing users of the working post-r5 setup have no reason to clean-flash solely to match this tag.
+This repository contains the source changes and validation notes from one reference handset. This is an unofficial Android 17 custom ROM port based on MonsterROM and UN1CA, maintained here by **malick186**.
 
 ## Quick navigation
 
 - [Device compatibility and requirements](#device-compatibility-and-requirements)
 - [Hardware, software and observed behavior](#hardware-software-and-observed-behavior)
-- [Version history and changelog](#version-history-and-changelog)
-- [ROM downloads and installation status](#rom-downloads-and-installation-status)
+- [Version history](#version-history)
+- [Releases and installation status](#releases-and-installation-status)
 - [Frequently asked questions](#frequently-asked-questions)
-- [Source code, licenses and credits](#source-code-licenses-and-credits)
-- [Build MonsterROM for SM-G998B](docs/BUILD.md)
-- [Post-r7 GPU update, validation and rollback](docs/POST-R7-UPDATES.md)
+- [Source and credits](#source-and-credits)
 
 ## Device compatibility and requirements
 
-| Requirement | Supported development target |
+| Item | Reference setup |
 |---|---|
-| Phone | Samsung Galaxy S21 Ultra 5G |
-| Model | **SM-G998B**; the repository name's `SM-G99B` is a naming typo |
-| Device codename / chipset | `p3s` / Samsung Exynos 2100 |
-| Target firmware | `G998BXXSJHZC2`, bootloader revision **19** |
-| Installation environment | Unlocked bootloader and compatible TWRP that preserves boot |
-| Current candidate | MonsterROM Android 17 Beta 2 r7; a complete clean installation remains unvalidated |
+| Device | Samsung Galaxy S21 Ultra 5G **SM-G998B** (`p3s`, Exynos 2100) |
+| Firmware | `G998BXXSJHZC2`, bootloader revision **19** |
+| Recovery | Unlocked bootloader and compatible TWRP |
+| Latest documented development build | **Stability 1.2 DEV LOCAL**, clean-install tested on one reference handset |
 
-Compatibility with other S21, S21+, S21 Ultra model numbers or Snapdragon variants is not established by this project. Read the [installation status and data-erasure requirements](#rom-downloads-and-installation-status) before considering a flash.
+Other model numbers, including Snapdragon variants, have not been validated. See the [installation requirements](docs/STABILITY-1.2.md#installation-requirements) before considering a flash. Format Data erases internal storage, apps, accounts and settings; keep a current off-device backup.
 
 ## Hardware, software and observed behavior
-
-**Latest reference-device update (15 November 2026):** Mali r38p1 / Vulkan 1.3 is active through a guarded, reversible early-boot loader. QHD+ and 640 dpi are retained. The ART/profile repair and GPU update are **post-r7 runtime changes**, not a new flashable release. Video freezing and shade lag remain unresolved. [Changes, validation, credits and rollback](docs/POST-R7-UPDATES.md).
 
 | Area | What the port contains or the reference device demonstrated |
 |---|---|
 | Platform | Galaxy S26 SM-S942B ESSI donor, Android 17 / SDK 37, on S21 Ultra vendor hardware. One UI reports `90500`. MonsterROM describes this as a 9.5 backport based on One UI 9.0, with selected QPR2 components. |
 | Kernel | Linux 5.4.304, Floppy v1.1.2-KN lineage, matched r54 Mali/vendor module set. Clang LTO and CFI enabled; SELinux enforcing. The published resolved kernel config matches the live device. |
 | Boot and storage | Samsung vendor-boot layout, matched boot, DTBO and verification metadata, Android file-based encryption and target-specific VINTF checks. Keep the kernel and vendor ramdisk together. |
-| Screen and touch | Physical QHD+ 1440 × 3200, 640 dpi override and adaptive refresh. QHD+ shade tests reached native 60 and 120 Hz. HD+ and FHD+ layout, group expansion, long messages and local inline replies were exercised at 640 dpi. Native panel switching at the two lower resolutions remains open. The retained profile reasserts QHD+ after boot. |
+| Screen and touch | Stability 1.2 passed physical switching and touch checks through Settings in HD+ (720 × 1600 at 320 dpi), FHD+ (1080 × 2400 at 480 dpi) and QHD+ (1440 × 3200 at 640 dpi). The density tracks the selected resolution to keep the interface the same size. |
+| Graphics and camera | Stability 1.2 restores the matched Mali r38p0 stack in place of the r38p1 update. After the clean flash, a Night capture processed all 12 frames, completed denoising and saved a 4000 × 3000 JPEG with `NO_ERROR`. |
 | Unlock and telephony | A private PIN opened credential-encrypted storage and One UI Home after restart. The S21 stock VaultKeeper client and HIDL library were restored ahead of framework startup. Slot 1 registered on LTE. 5G registration, payment certification and broad carrier compatibility remain unverified. |
 | Root and performance | KernelSU Next root worked on the reference phone. System UI uses its original APK. Grouped-notification remeasurement and occasional missed frames remain measurable at QHD+. |
 
-## Version history and changelog
+## Version history
 
 | Revision | Changes and outcome |
 |---|---|
@@ -58,40 +51,34 @@ Compatibility with other S21, S21+, S21 Ultra model numbers or Snapdragon varian
 | Post-r5 shade experiments | Tested renderer and compilation behavior, conversation-icon layout guards and group-count label guards. The last guard skipped two redundant writes per measured final rebuild, but late frames did not improve. The original System UI was restored. SQL and reverted patches are retained under `tests/shade/`. |
 | **Beta 2 r6** | Consolidated the working boot, vendor boot, DTBO, ODM, verification images and runtime fixes into one recovery ZIP. Added input pinning, clean-storage checks and release verification. The installer stages the runtime files before flashing partitions. This packaging step requires its own clean-install test. |
 | **Beta 2 r7** | Corrects the public minor SDK to the donor’s Android 17 API 37.0 across system, embedded system_ext and product. The former 37.2 label led Maps to load a missing MemoryBudgetManager class. Play services also logged a missing SignedPackageWithMetadata class. With the equivalent boot-time correction, Maps cold-launched and accepted a location search, and Google Settings opened without either exception during the test window. The clean installer sets the values in the images before first boot and does not require a root script for this correction. |
+| Post-r7 runtime updates | Added the reversible Mali r38p1 experiment and the SBC software encoding workaround. Laptop Bluetooth media playback and reconnect passed during the SBC test. [GPU and ART changes](docs/POST-R7-UPDATES.md) · [SBC test and rollback](docs/BLUETOOTH-SBC-OFFLOAD.md) |
+| **Stability 1.2 DEV LOCAL** | Consolidates the encryption-safe installer staging, active display geometry, proportional resolution profile, and Night camera dependencies with the matched Mali r38p0 stack. Carries forward API 37.0 and the SBC configuration. The complete installer passed the requested clean-install checks on one reference phone. [Validation](docs/STABILITY-1.2.md) |
 
-## ROM downloads and installation status
+## Releases and installation status
 
-The later [post-r7 updates](docs/POST-R7-UPDATES.md) are documented separately with source-only GPU staging support. They have not been merged into or clean-flash-tested as a new full ROM ZIP. Driver binaries and full installers remain local.
+The [Stability 1.2 GitHub release](https://github.com/malick186/S21-Ultra-5g-SM-G998B-Android-17-OneUI-9.5/releases/tag/stability-1.2) provides the source archive and release notes. The tested Stability 1.2 recovery ZIP, **MonsterROM-p3s-SM-G998B-Stability-1.2-DEV-LOCAL.zip**, stays local because it contains proprietary firmware and apps and a tester-specific public ADB key. Its SHA-256 and installation requirements are recorded in the [Stability 1.2 notes](docs/STABILITY-1.2.md).
 
-The GitHub source archives contain the development project. For the recovery installer, the filename is **MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip**. Check the SHA-256 against the release checksum before use. The installer is for an unlocked SM-G998B on **G998BXXSJHZC2, bootloader revision 19**, with a compatible TWRP that preserves boot. It checks these conditions before writing partitions. It does not install recovery, a modem or a bootloader.
+The [key-free local installer recipe](docs/SHARING-STABILITY-1.2.md) removes
+the tester's ADB authorization and leaves USB debugging under Android's
+normal user control.
 
-The clean-test procedure requires an off-device backup and freshly formatted Data. Format Data **erases apps, settings and internal storage**. Recovery must mount real Data and Metadata read-write before installation. Formatting after installation removes runtime fixes. Use the original matching Samsung BL/AP/CP/CSC repair set as the recovery route. A complete r7 clean flash has not yet been validated, so this is a development candidate.
-
-[Release page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) · [Installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) · [Build instructions](docs/BUILD.md)
+The historical Beta 2 r7 release remains available with its [installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) and [build instructions](docs/BUILD.md). The complete r7 installer has separate validation status from Stability 1.2.
 
 ## Frequently asked questions
 
 ### Is this an official Samsung Android 17 update?
 
-No. This is an unofficial MonsterROM and UN1CA-based development port maintained here by malick186. It is not a Samsung release.
+No. This is an unofficial development port based on MonsterROM and UN1CA.
 
-### Which Galaxy S21 Ultra model does this ROM target?
+### Does GitHub include a flashable ROM?
 
-The target is the Exynos 2100 **Samsung Galaxy S21 Ultra 5G SM-G998B**, codename `p3s`. The `SM-G99B` spelling in the repository URL does not identify an additional supported model. Other variants are not validated here.
+No. The [Stability 1.2 prerelease](https://github.com/malick186/S21-Ultra-5g-SM-G998B-Android-17-OneUI-9.5/releases/tag/stability-1.2) provides source and release notes. The tested recovery ZIP is not published.
 
-### Is MonsterROM Beta 2 r7 ready for a daily driver?
+### What has been tested?
 
-This repository documents a development candidate. Individual fixes reached One UI Home on the reference handset, but a complete r7 clean installation and first PIN unlock remain untested. Video freezing and notification-shade lag remain unresolved; 5G registration, payment certification and broad carrier compatibility are unverified.
+The clean install reached One UI Home on one SM-G998B. Touch worked in HD+, FHD+ and QHD+, and the saved Night mode photo opened. This does not establish daily-driver readiness. Video freezing remains deferred, and in-car Bluetooth audio and broader regression coverage remain untested for this installer. See the [test limits](docs/STABILITY-1.2.md#test-limits).
 
-### Does GitHub's Download ZIP contain the flashable ROM?
-
-No. GitHub's source ZIP contains this development project. The recovery installer is named `MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip`; full installers and proprietary driver binaries remain local. The [releases page](https://github.com/malick186/S21-Ultra-5g-SM-G99B/releases) and [published SHA-256 checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) are references, not a claim that an installer binary is publicly available.
-
-### Where are the build instructions and Exynos 2100 GPU updates?
-
-Start with the [SM-G998B ROM build instructions](docs/BUILD.md). The [post-r7 update notes](docs/POST-R7-UPDATES.md) cover the Mali r38p1 / Vulkan 1.3 runtime update, validation, upstream credits and rollback. Those runtime changes are not a new flashable ROM release.
-
-## Source code, licenses and credits
+## Source and credits
 
 The optional Exynos 2100 GPU update is ported by **EliteUI / elitetest1**: [upstream r38p1 release](https://github.com/elitetest1/GpuDriverUpdate_Exynos2100/releases/tag/v1.3). Only the local guarded loader and hash manifest are published here; Samsung/Arm driver binaries are excluded.
 

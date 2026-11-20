@@ -63,3 +63,7 @@ The 8,394,602,613-byte candidate passed ZIP CRC, duplicate-entry, payload readba
 | odm | 0fd56399794f138a176e7a63e757e8aa89a76a0574d0bc26ada1e0b831957a64 |
 
 A clean installation on a second or disposable SM-G998B remains the next validation step. Confirm the firmware and rescue prerequisites in the README before a destructive test. Record recovery staging and readback, first setup, a PIN unlock after restart, carrier registration, physical screen fit at QHD+/640 dpi, and notification shade behavior at 60 and 120 Hz. Keep personal logs, handset identifiers, PINs and radio backups private.
+
+## Optional post-r7 Bluetooth workaround
+
+The [SBC offload workaround](BLUETOOTH-SBC-OFFLOAD.md#future-clean-build-integration) includes a product-property source fragment and explicit future-build validation steps. It is not automatically incorporated into the r7 assembler or release ZIP. Laptop media playback and reconnect passed; clean-install and reboot testing remain required.

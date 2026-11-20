@@ -1,0 +1,11 @@
+--- installed/LocalDisplayDevice.smali
++++ patched/LocalDisplayDevice.smali
+@@ -1960,7 +1960,7 @@
+ 
+     if-nez v1, :cond_3d5
+ 
+-    sget-boolean v1, Lcom/samsung/android/rune/CoreRune;->FW_DYNAMIC_RESOLUTION_CONTROL:Z
++    const/4 v1, 0x0
+ 
+     if-eqz v1, :cond_1f
+ 
