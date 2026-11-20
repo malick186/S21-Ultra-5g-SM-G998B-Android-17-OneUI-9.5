@@ -1,8 +1,28 @@
-# MonsterROM Android 17 for Galaxy S21 Ultra 5G (Exynos)
+# Samsung Galaxy S21 Ultra 5G SM-G998B: MonsterROM Android 17
 
 **Stability 1.2 DEV LOCAL** passed a clean install on the Exynos Galaxy S21 Ultra **SM-G998B** (`p3s`) on 20 November 2026. Setup Wizard reached One UI Home, all three display modes fit and responded to touch, and Night mode completed a 12-frame capture and saved an openable JPEG. [Stability 1.2 validation and sources](docs/STABILITY-1.2.md)
 
-This repository contains the source changes and validation notes from one reference handset. The supported model is **SM-G998B**. This is an unofficial port based on MonsterROM and UN1CA, maintained here by **malick186**.
+This repository contains the source changes and validation notes from one reference handset. This is an unofficial Android 17 custom ROM port based on MonsterROM and UN1CA, maintained here by **malick186**.
+
+## Quick navigation
+
+- [Device compatibility and requirements](#device-compatibility-and-requirements)
+- [Hardware, software and observed behavior](#hardware-software-and-observed-behavior)
+- [Version history](#version-history)
+- [Releases and installation status](#releases-and-installation-status)
+- [Frequently asked questions](#frequently-asked-questions)
+- [Source and credits](#source-and-credits)
+
+## Device compatibility and requirements
+
+| Item | Reference setup |
+|---|---|
+| Device | Samsung Galaxy S21 Ultra 5G **SM-G998B** (`p3s`, Exynos 2100) |
+| Firmware | `G998BXXSJHZC2`, bootloader revision **19** |
+| Recovery | Unlocked bootloader and compatible TWRP |
+| Latest documented development build | **Stability 1.2 DEV LOCAL**, clean-install tested on one reference handset |
+
+Other model numbers, including Snapdragon variants, have not been validated. See the [installation requirements](docs/STABILITY-1.2.md#installation-requirements) before considering a flash. Format Data erases internal storage, apps, accounts and settings; keep a current off-device backup.
 
 ## Hardware, software and observed behavior
 
@@ -43,6 +63,20 @@ the tester's ADB authorization and leaves USB debugging under Android's
 normal user control.
 
 The historical Beta 2 r7 release remains available with its [installer checksum](docs/MonsterROM-p3s-SM-G998B-A17-beta2-r7.zip.sha256) and [build instructions](docs/BUILD.md). The complete r7 installer has separate validation status from Stability 1.2.
+
+## Frequently asked questions
+
+### Is this an official Samsung Android 17 update?
+
+No. This is an unofficial development port based on MonsterROM and UN1CA.
+
+### Does GitHub include a flashable ROM?
+
+No. The [Stability 1.2 prerelease](https://github.com/malick186/S21-Ultra-5g-SM-G998B-Android-17-OneUI-9.5/releases/tag/stability-1.2) provides source and release notes. The tested recovery ZIP is not published.
+
+### What has been tested?
+
+The clean install reached One UI Home on one SM-G998B. Touch worked in HD+, FHD+ and QHD+, and the saved Night mode photo opened. This does not establish daily-driver readiness. Video freezing remains deferred, and in-car Bluetooth audio and broader regression coverage remain untested for this installer. See the [test limits](docs/STABILITY-1.2.md#test-limits).
 
 ## Source and credits
 
