@@ -15,6 +15,7 @@ This repository contains the source changes and validation notes from one refere
 | Graphics and camera | Stability 1.2 restores the matched Mali r38p0 stack in place of the r38p1 update. After the clean flash, a Night capture processed all 12 frames, completed denoising and saved a 4000 × 3000 JPEG with `NO_ERROR`. |
 | Unlock and telephony | A private PIN opened credential-encrypted storage and One UI Home after restart. The S21 stock VaultKeeper client and HIDL library were restored ahead of framework startup. Slot 1 registered on LTE. 5G registration, payment certification and broad carrier compatibility remain unverified. |
 | Root and performance | KernelSU Next root worked on the reference phone. System UI uses its original APK. Grouped-notification remeasurement and occasional missed frames remain measurable at QHD+. |
+| Video playback | The Stability 1.2 follow-up reproduced stutter with audio continuing. Fixed refresh reduced display-side skips in local clips. Everyday app validation is pending. [Video playback validation](docs/VIDEO-PLAYBACK-VALIDATION.md) |
 
 ## Version history
 
