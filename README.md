@@ -15,7 +15,7 @@ This repository contains the source changes and validation notes from one refere
 | Graphics and camera | Stability 1.2 restores the matched Mali r38p0 stack in place of the r38p1 update. After the clean flash, a Night capture processed all 12 frames, completed denoising and saved a 4000 × 3000 JPEG with `NO_ERROR`. |
 | Unlock and telephony | A private PIN opened credential-encrypted storage and One UI Home after restart. The S21 stock VaultKeeper client and HIDL library were restored ahead of framework startup. Slot 1 registered on LTE. 5G registration, payment certification and broad carrier compatibility remain unverified. |
 | Root and performance | KernelSU Next root worked on the reference phone. System UI uses its original APK. Grouped-notification remeasurement and occasional missed frames remain measurable at QHD+. |
-| Video playback | The Stability 1.2 follow-up reproduced stutter with audio continuing. Fixed refresh reduced display-side skips in local clips. Everyday app validation is pending. [Video playback validation](docs/VIDEO-PLAYBACK-VALIDATION.md) |
+| Video playback | All 15 local clips completed uninterrupted at FHD+, 480 dpi and fixed 60 Hz on Vulkan. Short frame-pacing hitches and intermittent Facebook stutter remain. [Video playback validation](docs/VIDEO-PLAYBACK-VALIDATION.md) |
 
 ## Version history
 
@@ -34,6 +34,7 @@ This repository contains the source changes and validation notes from one refere
 | **Beta 2 r7** | Corrects the public minor SDK to the donor’s Android 17 API 37.0 across system, embedded system_ext and product. The former 37.2 label led Maps to load a missing MemoryBudgetManager class. Play services also logged a missing SignedPackageWithMetadata class. With the equivalent boot-time correction, Maps cold-launched and accepted a location search, and Google Settings opened without either exception during the test window. The clean installer sets the values in the images before first boot and does not require a root script for this correction. |
 | Post-r7 runtime updates | Added the reversible Mali r38p1 experiment and the SBC software encoding workaround. Laptop Bluetooth media playback and reconnect passed during the SBC test. [GPU and ART changes](docs/POST-R7-UPDATES.md) · [SBC test and rollback](docs/BLUETOOTH-SBC-OFFLOAD.md) |
 | **Stability 1.2 DEV LOCAL** | Consolidates the encryption-safe installer staging, active display geometry, proportional resolution profile, and Night camera dependencies with the matched Mali r38p0 stack. Carries forward API 37.0 and the SBC configuration. The complete installer passed the requested clean-install checks on one reference phone. [Validation](docs/STABILITY-1.2.md) |
+| Stability 1.2 playback follow-up (26–27 November 2026) | Completed the 15-clip Vulkan replay and measured the remaining short frame gaps. Isolated a CPU hotplug affinity reset and separate Facebook player and rendering interruptions. The playback issue remains open. [Test results](docs/VIDEO-PLAYBACK-VALIDATION.md#playback-follow-up) |
 
 ## Releases and installation status
 

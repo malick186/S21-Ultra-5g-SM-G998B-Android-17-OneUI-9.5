@@ -22,7 +22,7 @@ All three modes were selected through Samsung Settings. HD+ was left active afte
 
 The first-boot USB helper logged an `IllegalArgumentException` when requesting its USB function combination. Authenticated ADB reconnected and all requested clean-install checks completed. Car Bluetooth audio and broader regression coverage remain untested for this installer. The shade traces are baseline measurements, with no new scheduler or GPU tuning in 1.2.
 
-Video stutter remains open. Follow-up local playback tests measured fewer display-side skips with fixed refresh. [Video playback validation](VIDEO-PLAYBACK-VALIDATION.md)
+Video stutter remains open. All 15 local clips completed uninterrupted at FHD+, 480 dpi and fixed 60 Hz on Vulkan. Timing still showed brief frame-pacing hitches, and intermittent stutter remained in Facebook. [Video playback validation](VIDEO-PLAYBACK-VALIDATION.md#playback-follow-up)
 
 ## Local installer
 
